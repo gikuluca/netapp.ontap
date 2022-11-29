@@ -14,7 +14,7 @@ DOCUMENTATION = '''
 module: na_ontap_vserver_cifs_security
 short_description: NetApp ONTAP vserver CIFS security modification
 extends_documentation_fragment:
-    - netapp.ontap.netapp.na_ontap
+    - netapp.ontap.netapp.na_ontap_zapi
 version_added: 2.9.0
 author: NetApp Ansible Team (@carchi8py) <ng-ansibleteam@netapp.com>
 
@@ -172,7 +172,7 @@ class NetAppONTAPCifsSecurity(object):
     '''
     def __init__(self):
 
-        self.argument_spec = netapp_utils.na_ontap_host_argument_spec()
+        self.argument_spec = netapp_utils.na_ontap_zapi_only_spec()
         self.argument_spec.update(dict(
             vserver=dict(required=True, type='str'),
             kerberos_clock_skew=dict(required=False, type='int'),
@@ -201,6 +201,7 @@ class NetAppONTAPCifsSecurity(object):
 
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
+        self.na_helper.module_replaces('na_ontap_cifs_server', self.module)
         msg = 'Error: na_ontap_vserver_cifs_security only supports ZAPI.netapp.ontap.na_ontap_cifs_server should be used instead.'
         self.na_helper.fall_back_to_zapi(self.module, msg, self.parameters)
 
@@ -288,7 +289,6 @@ class NetAppONTAPCifsSecurity(object):
 
     def apply(self):
         """Call modify operations."""
-        netapp_utils.ems_log_event("na_ontap_vserver_cifs_security", self.server)
         current = self.cifs_security_get_iter()
         modify = self.na_helper.get_modified_attributes(current, self.parameters)
         if self.na_helper.changed:
@@ -297,7 +297,8 @@ class NetAppONTAPCifsSecurity(object):
             else:
                 if modify:
                     self.cifs_security_modify(modify)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, modify=modify)
+        self.module.exit_json(**result)
 
 
 def main():

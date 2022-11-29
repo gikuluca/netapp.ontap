@@ -257,11 +257,8 @@ class NetAppOntapFpolicyStatus(object):
                                       exception=traceback.format_exc())
 
     def apply(self):
-
         if self.use_rest:
             self.svm_uuid = self.get_svm_uuid()
-        else:
-            netapp_utils.ems_log_event("na_ontap_fpolicy_status", self.server)
 
         current = self.get_fpolicy_policy_status()
         modify = self.na_helper.get_modified_attributes(current, self.parameters)
@@ -272,8 +269,8 @@ class NetAppOntapFpolicyStatus(object):
                     self.enable_fpolicy_policy()
                 elif not modify['status']:
                     self.disable_fpolicy_policy()
-
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, modify=modify)
+        self.module.exit_json(**result)
 
 
 def main():

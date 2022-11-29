@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-(c) 2018-2019, NetApp, Inc
+(c) 2018-2022, NetApp, Inc
 GNU General Public License v3.0+
 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 '''
@@ -8,17 +8,13 @@ GNU General Public License v3.0+
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-ANSIBLE_METADATA = {'metadata_version': '1.1',
-                    'status': ['preview'],
-                    'supported_by': 'certified'}
-
 DOCUMENTATION = '''
 
 module: na_ontap_ldap
 
 short_description: NetApp ONTAP LDAP
 extends_documentation_fragment:
-    - netapp.ontap.netapp.na_ontap
+    - netapp.ontap.netapp.na_ontap_zapi
 version_added: 2.9.0
 author: Milan Zink (@zeten30) <zeten30@gmail.com>/<mzink@redhat.com>
 
@@ -29,26 +25,26 @@ options:
 
   state:
     description:
-    - Whether the LDAP is present or not.
+      - Whether the LDAP is present or not.
     choices: ['present', 'absent']
     default: 'present'
     type: str
 
   vserver:
     description:
-    - vserver/svm configured to use LDAP
+      - vserver/svm configured to use LDAP
     required: true
     type: str
 
   name:
     description:
-    - The name of LDAP client configuration
+      - The name of LDAP client configuration
     required: true
     type: str
 
   skip_config_validation:
     description:
-    - Skip LDAP validation
+      - Skip LDAP validation
     choices: ['true', 'false']
     type: str
 '''
@@ -56,7 +52,7 @@ options:
 EXAMPLES = '''
 
     - name: Enable LDAP on SVM
-      na_ontap_ldap:
+      netapp.ontap.na_ontap_ldap:
         state:         present
         name:          'example_ldap'
         vserver:       'vserver1'
@@ -75,16 +71,14 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils._text import to_native
 from ansible_collections.netapp.ontap.plugins.module_utils.netapp_module import NetAppModule
 
-HAS_NETAPP_LIB = netapp_utils.has_netapp_lib()
 
-
-class NetAppOntapLDAP(object):
+class NetAppOntapLDAP:
     '''
     LDAP Client definition class
     '''
 
     def __init__(self):
-        self.argument_spec = netapp_utils.na_ontap_host_argument_spec()
+        self.argument_spec = netapp_utils.na_ontap_zapi_only_spec()
         self.argument_spec.update(dict(
             name=dict(required=True, type='str'),
             skip_config_validation=dict(required=False, default=None, choices=['true', 'false']),
@@ -98,12 +92,12 @@ class NetAppOntapLDAP(object):
         )
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
+        msg = 'Error: na_ontap_ldap only supports ZAPI.netapp.ontap.na_ontap_ldap_client should be used instead.'
+        self.na_helper.fall_back_to_zapi(self.module, msg, self.parameters)
 
-        if HAS_NETAPP_LIB is False:
-            self.module.fail_json(
-                msg="the python NetApp-Lib module is required")
-        else:
-            self.server = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=self.parameters['vserver'])
+        if not netapp_utils.has_netapp_lib():
+            self.module.fail_json(msg="the python NetApp-Lib module is required")
+        self.server = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=self.parameters['vserver'])
 
     def get_ldap(self, client_config_name=None):
         '''
@@ -199,8 +193,6 @@ class NetAppOntapLDAP(object):
         current = self.get_ldap()
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
         modify = self.na_helper.get_modified_attributes(current, self.parameters)
-        #  create an ems log event for users with auto support turned on
-        netapp_utils.ems_log_event("na_ontap_ldap", self.server)
 
         if self.na_helper.changed:
             if self.module.check_mode:
@@ -212,7 +204,8 @@ class NetAppOntapLDAP(object):
                     self.delete_ldap()
                 elif modify:
                     self.modify_ldap(modify)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 #

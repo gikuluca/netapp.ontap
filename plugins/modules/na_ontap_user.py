@@ -336,17 +336,23 @@ class NetAppOntapUser:
             for application in self.parameters['applications']:
                 if application['application'] == 'service_processor':
                     application['application'] = 'service-processor'
-            return
         if self.parameters['applications'] is None:
             return
-        if any(application['application'] == 'snmp' for application in self.parameters['applications']):
-            self.module.fail_json(msg="snmp as application is not supported in REST.")
+        application_keys = []
         for application in self.parameters['applications']:
-            # REST prefers certificate to cert
-            application['authentication_methods'] = ['certificate' if x == 'cert' else x for x in application['authentication_methods']]
-            # REST get always returns 'second_authentication_method'
-            if 'second_authentication_method' not in application:
-                application['second_authentication_method'] = None
+            # make sure app entries are not duplicated
+            application_name = application['application']
+            if application_name in application_keys:
+                self.module.fail_json(msg='Error: repeated application name: %s.  Group all authentication methods under a single entry.' % application_name)
+            application_keys.append(application_name)
+            if self.use_rest:
+                if application_name == 'snmp':
+                    self.module.fail_json(msg="snmp as application is not supported in REST.")
+                # REST prefers certificate to cert
+                application['authentication_methods'] = ['certificate' if x == 'cert' else x for x in application['authentication_methods']]
+                # REST get always returns 'second_authentication_method'
+                if 'second_authentication_method' not in application:
+                    application['second_authentication_method'] = None
 
     def strs_to_dicts(self):
         """transform applications list of strs to a list of dicts if application_strs in use"""
@@ -392,20 +398,22 @@ class NetAppOntapUser:
             'fields': 'role,applications,locked'
         }
         api = "security/accounts/%s/%s" % (owner_uuid, name)
-        message, error = self.rest_api.get(api, query)
+        response, error = self.rest_api.get(api, query)
         if error:
             self.module.fail_json(msg='Error while fetching user details: %s' % error)
-        if message:
+        if response:
             # replace "none" values with None for comparison
-            for application in message['applications']:
+            for application in response['applications']:
                 if application.get('second_authentication_method') == 'none':
                     application['second_authentication_method'] = None
+                # new read-only attribute in 9.11, breaks idempotency when present
+                application.pop('is_ldap_fastbind', None)
             return_value = {
-                'role_name': message['role']['name'],
-                'applications': message['applications']
+                'role_name': response['role']['name'],
+                'applications': response['applications']
             }
-            if "locked" in message:
-                return_value['lock_user'] = message['locked']
+            if "locked" in response:
+                return_value['lock_user'] = response['locked']
         return return_value
 
     def get_user(self):
@@ -442,8 +450,10 @@ class NetAppOntapUser:
 
         applications = {}
         attr = result.get_child_by_name('attributes-list')
+        locks = []
         for info in attr.get_children():
             lock_user = self.na_helper.get_value_for_bool(True, info.get_child_content('is-locked'))
+            locks.append(lock_user)
             role_name = info.get_child_content('role-name')
             application = info.get_child_content('application')
             auth_method = info.get_child_content('authentication-method')
@@ -461,7 +471,7 @@ class NetAppOntapUser:
         apps = [dict(application=application, authentication_methods=sorted(methods), second_authentication_method=sec_method)
                 for application, (methods, sec_method) in applications.items()]
         return dict(
-            lock_user=lock_user,
+            lock_user=any(locks),
             role_name=role_name,
             applications=apps
         )
@@ -757,7 +767,6 @@ class NetAppOntapUser:
                 current = self.get_user_details_rest(name, owner_uuid)
                 self.change_sp_application(current['applications'])
         else:
-            netapp_utils.ems_log_event("na_ontap_user", self.server)
             current = self.get_user()
         return current, owner_uuid, name
 

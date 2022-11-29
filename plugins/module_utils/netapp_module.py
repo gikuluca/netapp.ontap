@@ -67,7 +67,17 @@ class NetAppModule(object):
     '''
 
     def __init__(self, module=None):
-        self.module = module
+        # we can call this with module set to self or self.module
+        # self is a NetApp module, while self.module is the AnsibleModule object
+        self.netapp_module = None
+        self.ansible_module = module
+        if module and getattr(module, 'module', None) is not None:
+            self.netapp_module = module
+            self.ansible_module = module.module
+        # When using self or self.module, this gives access to:
+        #       self.ansible_module.fail_json
+        # When using self, this gives access to:
+        #       self.netapp_module.rest_api.log_debug
         self.log = []
         self.changed = False
         self.parameters = {'name': 'not initialized'}
@@ -77,6 +87,14 @@ class NetAppModule(object):
         self.zapi_int_keys = {}
         self.zapi_required = {}
         self.params_to_rest_api_keys = {}
+
+    def module_deprecated(self, module):
+        module.warn('The module only supports ZAPI and is deprecated, and will no longer work with newer versions '
+                    'of ONTAP when ONTAPI is deprecated in CY22-Q4')
+
+    def module_replaces(self, new_module, module):
+        self.module_deprecated(module)
+        module.warn('netapp.ontap.%s should be used instead.' % new_module)
 
     def set_parameters(self, ansible_params):
         self.parameters = {}
@@ -192,9 +210,7 @@ class NetAppModule(object):
             return None
         # change in state
         self.changed = True
-        if current is not None:
-            return 'delete'
-        return 'create'
+        return 'create' if current is None else 'delete'
 
     @staticmethod
     def check_keys(current, desired):
@@ -265,6 +281,8 @@ class NetAppModule(object):
 
         # collect changed attributes
         for key, value in current.items():
+            # if self.netapp_module:
+            #     self.netapp_module.rest_api.log_debug('KDV', "%s:%s:%s" % (key, desired.get(key), value))
             if desired.get(key) is not None:
                 modified_value = None
                 if isinstance(value, list):
@@ -276,6 +294,8 @@ class NetAppModule(object):
                         result = cmp(value, desired[key])
                     except TypeError as exc:
                         raise TypeError("%s, key: %s, value: %s, desired: %s" % (repr(exc), key, repr(value), repr(desired[key])))
+                    # if self.netapp_module:
+                    #     self.netapp_module.rest_api.log_debug('RESULT', result)
                     if result != 0:
                         modified_value = desired[key]
                 if modified_value is not None:
@@ -334,8 +354,8 @@ class NetAppModule(object):
         return initiator
 
     def safe_get(self, an_object, key_list, allow_sparse_dict=True):
-        ''' recursively traverse a dictionary or a any object supporting get_item
-            (in our case, python dicts and NAElement responses)
+        ''' recursively traverse a dictionary or a any object supporting get_item or indexing
+            (in our case, python dicts and NAElement responses, and lists)
             It is expected that some keys can be missing, this is controlled with allow_sparse_dict
 
             return value if the key chain is exhausted
@@ -351,8 +371,8 @@ class NetAppModule(object):
         key = key_list.pop(0)
         try:
             return self.safe_get(an_object[key], key_list, allow_sparse_dict=allow_sparse_dict)
-        except KeyError as exc:
-            # error, key not found
+        except (KeyError, IndexError) as exc:
+            # error, key or index not found
             if allow_sparse_dict:
                 return None
             raise exc
@@ -380,7 +400,7 @@ class NetAppModule(object):
             return value == 'true', None
         if convert_to == 'bool_online':
             return value == 'online', None
-        self.module.fail_json(msg='Error: Unexpected value for convert_to: %s' % convert_to)
+        self.ansible_module.fail_json(msg='Error: Unexpected value for convert_to: %s' % convert_to)
 
     def zapi_get_value(self, na_element, key_list, required=False, default=None, convert_to=None):
         """ read a value from na_element using key_list
@@ -390,7 +410,7 @@ class NetAppModule(object):
             If convert_to is set to str, bool, int, the ZAPI value is converted from str to the desired type.
                 suported values: None, the python types int, str, bool, special 'bool_online'
 
-        Errors: self.module.fail_json is called for:
+        Errors: fail_json is called for:
             - a key is not found and required=True,
             - a format conversion error
         """
@@ -404,7 +424,7 @@ class NetAppModule(object):
         else:
             value, error = self.convert_value(value, convert_to) if value is not None else (default, None)
         if error:
-            self.module.fail_json(msg='Error reading %s from %s: %s' % (saved_key_list, na_element.to_string(), error))
+            self.ansible_module.fail_json(msg='Error reading %s from %s: %s' % (saved_key_list, na_element.to_string(), error))
         return value
 
     def zapi_get_attrs(self, na_element, attr_dict, result):
@@ -422,7 +442,7 @@ class NetAppModule(object):
             When the value is None, if omitnone is False, a None value is recorded, if True, the key is not set.
         result: an existing dictionary.  keys are added or updated based on attrs.
 
-        Errors: self.module.fail_json is called for:
+        Errors: fail_json is called for:
             - a key is not found and required=True,
             - a format conversion error
         """
@@ -432,48 +452,50 @@ class NetAppModule(object):
             if value is not None or not omitnone:
                 result[key] = value
 
-    def _filter_out_none_entries_from_dict(self, adict):
+    def _filter_out_none_entries_from_dict(self, adict, allow_empty_list_or_dict):
         """take a dict as input and return a dict without keys whose values are None
-           skip empty dicts or lists.
+           return empty dicts or lists if allow_empty_list_or_dict otherwise skip empty dicts or lists.
         """
         result = {}
         for key, value in adict.items():
             if isinstance(value, (list, dict)):
-                sub = self.filter_out_none_entries(value)
-                if sub:
-                    # skip empty dict or list
+                sub = self.filter_out_none_entries(value, allow_empty_list_or_dict)
+                if sub or allow_empty_list_or_dict:
+                    # allow empty dict or list if allow_empty_list_or_dict is set.
+                    # skip empty dict or list otherwise
                     result[key] = sub
             elif value is not None:
                 # skip None value
                 result[key] = value
         return result
 
-    def _filter_out_none_entries_from_list(self, alist):
+    def _filter_out_none_entries_from_list(self, alist, allow_empty_list_or_dict):
         """take a list as input and return a list without elements whose values are None
-           skip empty dicts or lists.
+           return empty dicts or lists if allow_empty_list_or_dict otherwise skip empty dicts or lists.
         """
         result = []
         for item in alist:
             if isinstance(item, (list, dict)):
-                sub = self.filter_out_none_entries(item)
-                if sub:
-                    # skip empty dict or list
+                sub = self.filter_out_none_entries(item, allow_empty_list_or_dict)
+                if sub or allow_empty_list_or_dict:
+                    # allow empty dict or list if allow_empty_list_or_dict is set.
+                    # skip empty dict or list otherwise
                     result.append(sub)
             elif item is not None:
                 # skip None value
                 result.append(item)
         return result
 
-    def filter_out_none_entries(self, list_or_dict):
+    def filter_out_none_entries(self, list_or_dict, allow_empty_list_or_dict=False):
         """take a dict or list as input and return a dict/list without keys/elements whose values are None
-           skip empty dicts or lists.
+           return empty dicts or lists if allow_empty_list_or_dict otherwise skip empty dicts or lists.
         """
 
         if isinstance(list_or_dict, dict):
-            return self._filter_out_none_entries_from_dict(list_or_dict)
+            return self._filter_out_none_entries_from_dict(list_or_dict, allow_empty_list_or_dict)
 
         if isinstance(list_or_dict, list):
-            return self._filter_out_none_entries_from_list(list_or_dict)
+            return self._filter_out_none_entries_from_list(list_or_dict, allow_empty_list_or_dict)
 
         raise TypeError('unexpected type %s' % type(list_or_dict))
 
@@ -498,7 +520,7 @@ class NetAppModule(object):
                 function_name = 'Error retrieving function name: %s - %s' % (str(exc), repr(frames))
         return function_name
 
-    def fail_on_error(self, error, api=None, stack=False, depth=1):
+    def fail_on_error(self, error, api=None, stack=False, depth=1, previous_errors=None):
         '''depth identifies how far is the caller in the call stack'''
         if error is None:
             return
@@ -509,9 +531,11 @@ class NetAppModule(object):
         results = dict(msg='Error in %s: %s' % (self.get_caller(depth), error))
         if stack:
             results['stack'] = traceback.format_stack()
-        if getattr(self, 'module', None) is not None:
-            self.module.fail_json(**results)
-        raise AttributeError('Expecting self.module to be set when reporting %s' % repr(results))
+        if previous_errors:
+            results['previous_errors'] = ' - '.join(previous_errors)
+        if getattr(self, 'ansible_module', None) is not None:
+            self.ansible_module.fail_json(**results)
+        raise AttributeError('Expecting self.ansible_module to be set when reporting %s' % repr(results))
 
     def compare_chmod_value(self, current_permissions, desired_permissions):
         """
@@ -531,7 +555,7 @@ class NetAppModule(object):
             if desired_permissions[0] not in ['s', '-'] or desired_permissions[1] not in ['s', '-']\
                     or desired_permissions[2] not in ['t', '-']:
                 return False
-            desired_octal_value += str(self.char_to_octal(desired_permissions[0:3]))
+            desired_octal_value += str(self.char_to_octal(desired_permissions[:3]))
         # if the len is 9, start from 0 else start from 3.
         start_range = len(desired_permissions) - 9
         for i in range(start_range, len(desired_permissions), 3):
@@ -555,3 +579,38 @@ class NetAppModule(object):
         if chars[2] in ['x', 't']:
             total += 1
         return total
+
+    def ignore_missing_vserver_on_delete(self, error, vserver_name=None):
+        """ When a resource is expected to be absent, it's OK if the containing vserver is also absent.
+            This function expects self.parameters('vserver') to be set or the vserver_name argument to be passed.
+            error is an error returned by rest_generic.get_xxxx.
+        """
+        if self.parameters.get('state') != 'absent':
+            return False
+        if vserver_name is None:
+            if self.parameters.get('vserver') is None:
+                self.ansible_module.fail_json(
+                    msg='Internal error, vserver name is required, when processing error: %s' % error, exception=traceback.format_exc())
+            vserver_name = self.parameters['vserver']
+        if isinstance(error, str):
+            pass
+        elif isinstance(error, dict):
+            if 'message' in error:
+                error = error['message']
+            else:
+                self.ansible_module.fail_json(
+                    msg='Internal error, error should contain "message" key, found: %s' % error, exception=traceback.format_exc())
+        else:
+            self.ansible_module.fail_json(
+                msg='Internal error, error should be str or dict, found: %s, %s' % (type(error), error), exception=traceback.format_exc())
+        return 'SVM "%s" does not exist.' % self.parameters['vserver'] in error
+
+    def remove_hal_links(self, records):
+        """ Remove all _links entries """
+        if isinstance(records, dict):
+            records.pop('_links', None)
+            for record in records.values():
+                self.remove_hal_links(record)
+        if isinstance(records, list):
+            for record in records:
+                self.remove_hal_links(record)

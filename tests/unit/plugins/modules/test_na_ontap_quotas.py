@@ -1,3 +1,6 @@
+# (c) 2019-2022, NetApp, Inc
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 ''' unit tests ONTAP Ansible module: na_ontap_quotas '''
 
 from __future__ import (absolute_import, division, print_function)
@@ -7,16 +10,103 @@ import pytest
 
 from ansible_collections.netapp.ontap.tests.unit.compat.mock import patch
 import ansible_collections.netapp.ontap.plugins.module_utils.netapp as netapp_utils
-from ansible_collections.netapp.ontap.tests.unit.plugins.module_utils.ansible_mocks import\
+from ansible_collections.netapp.ontap.tests.unit.plugins.module_utils.ansible_mocks import assert_no_warnings,\
     assert_warning_was_raised, call_main, patch_ansible, create_module, create_and_apply, expect_and_capture_ansible_exception, print_warnings
 from ansible_collections.netapp.ontap.tests.unit.framework.mock_rest_and_zapi_requests import patch_request_and_invoke, register_responses
 from ansible_collections.netapp.ontap.tests.unit.framework.zapi_factory import build_zapi_error, build_zapi_response, zapi_responses
+from ansible_collections.netapp.ontap.tests.unit.framework.rest_factory import rest_responses
 
 from ansible_collections.netapp.ontap.plugins.modules.na_ontap_quotas \
     import NetAppONTAPQuotas as my_module, main as my_main
 
 if not netapp_utils.has_netapp_lib():
     pytestmark = pytest.mark.skip('skipping as missing required netapp_lib')
+
+
+SRR = rest_responses({
+    # module specific responses
+    'quota_record': (
+        200,
+        {
+            "records": [
+                {
+                    "svm": {
+                        "uuid": "671aa46e-11ad-11ec-a267-005056b30cfa",
+                        "name": "ansible"
+                    },
+                    "files": {
+                        "hard_limit": "100",
+                        "soft_limit": "80"
+                    },
+                    "qtree": {
+                        "id": "1",
+                        "name": "qt1"
+                    },
+                    "space": {
+                        "hard_limit": "1222800",
+                        "soft_limit": "51200"
+                    },
+                    "type": "user",
+                    "user_mapping": False,
+                    "users": [{"name": "quota_user"}],
+                    "uuid": "264a9e0b-2e03-11e9-a610-005056a7b72d",
+                    "volume": {"name": "fv", "uuid": "264a9e0b-2e03-11e9-a610-005056a7b72da"},
+                    "target": {
+                        "name": "20:05:00:50:56:b3:0c:fa"
+                    },
+                }
+            ],
+            "num_records": 1
+        }, None
+    ),
+    'quota_record_0_empty_limtis': (200, {"records": [{
+        "svm": {"name": "ansible"},
+        "files": {"hard_limit": 0},
+        "qtree": {"id": "1", "name": "qt1"},
+        "space": {"hard_limit": 0},
+        "type": "user",
+        "user_mapping": False,
+        "users": [{"name": "quota_user"}],
+        "uuid": "264a9e0b-2e03-11e9-a610-005056a7b72d",
+        "volume": {"name": "fv", "uuid": "264a9e0b-2e03-11e9-a610-005056a7b72da"},
+        "target": {"name": "20:05:00:50:56:b3:0c:fa"},
+    }], "num_records": 1}, None),
+    'quota_status': (
+        200,
+        {
+            "records": [
+                {
+                    "quota": {"state": "off"}
+                }
+            ],
+            "num_records": 1
+        }, None
+    ),
+    'quota_on': (
+        200,
+        {
+            "records": [
+                {
+                    "quota": {"state": "on"}
+                }
+            ],
+            "num_records": 1
+        }, None
+    ),
+    "no_record": (
+        200,
+        {"num_records": 0},
+        None),
+    "error_5308572": (409, None, {'code': 5308572, 'message': 'Expected delete error'}),
+    "error_5308569": (409, None, {'code': 5308569, 'message': 'Expected delete error'}),
+    "error_5308568": (409, None, {'code': 5308568, 'message': 'Expected create error'}),
+    "error_5308571": (409, None, {'code': 5308571, 'message': 'Expected create error'}),
+    "error_5308567": (409, None, {'code': 5308567, 'message': 'Expected modify error'}),
+    "volume_uuid": (200, {"records": [{
+        'uuid': 'sdgthfd'
+    }], 'num_records': 1}, None)
+})
+
 
 quota_policy = {
     'num-records': 1,
@@ -49,7 +139,8 @@ DEFAULT_ARGS = {
     'volume': 'ansible',
     'vserver': 'ansible',
     'quota_target': '/vol/ansible',
-    'type': 'user'
+    'type': 'user',
+    'use_rest': 'never'
 }
 
 
@@ -89,12 +180,10 @@ def test_ensure_get_called_existing():
 def test_successful_create():
     ''' creating quota and testing idempotency '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'quota-list-entries-iter', ZRR['no_records']),
         ('ZAPI', 'quota-status', ZRR['quota_on']),
         ('ZAPI', 'quota-set-entry', ZRR['success']),
         ('ZAPI', 'quota-resize', ZRR['success']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'quota-list-entries-iter', ZRR['quota_policy']),
         ('ZAPI', 'quota-status', ZRR['quota_on']),
     ])
@@ -114,12 +203,10 @@ def test_successful_create():
 def test_successful_delete():
     ''' deleting quota and testing idempotency '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'quota-list-entries-iter', ZRR['quota_policy']),
         ('ZAPI', 'quota-status', ZRR['quota_on']),
         ('ZAPI', 'quota-delete-entry', ZRR['success']),
         ('ZAPI', 'quota-resize', ZRR['success']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'quota-list-entries-iter', ZRR['no_records']),
         ('ZAPI', 'quota-status', ZRR['quota_on']),
     ])
@@ -135,7 +222,6 @@ def test_successful_delete():
 def test_successful_modify(dont_sleep):
     ''' modifying quota and testing idempotency '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'quota-list-entries-iter', ZRR['quota_policy']),
         ('ZAPI', 'quota-status', ZRR['quota_on']),
         ('ZAPI', 'quota-modify-entry', ZRR['success']),
@@ -153,10 +239,8 @@ def test_successful_modify(dont_sleep):
 def test_quota_on_off():
     ''' quota set on or off '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'quota-list-entries-iter', ZRR['quota_policy']),
         ('ZAPI', 'quota-status', ZRR['quota_off']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'quota-list-entries-iter', ZRR['quota_policy']),
         ('ZAPI', 'quota-status', ZRR['quota_on']),
         ('ZAPI', 'quota-off', ZRR['success']),
@@ -265,19 +349,19 @@ def test_quota_on_warning():
 def test_convert_size_format():
     module_args = {'disk_limit': '10MB'}
     my_obj = create_module(my_module, DEFAULT_ARGS, module_args)
-    assert my_obj.convert_to_kb('disk_limit')
+    assert my_obj.convert_to_kb_or_bytes('disk_limit')
     print(my_obj.parameters)
     assert my_obj.parameters['disk_limit'] == '10240'
     my_obj.parameters['disk_limit'] = '10'
-    assert my_obj.convert_to_kb('disk_limit')
+    assert my_obj.convert_to_kb_or_bytes('disk_limit')
     print(my_obj.parameters)
     assert my_obj.parameters['disk_limit'] == '10'
     my_obj.parameters['disk_limit'] = '10tB'
-    assert my_obj.convert_to_kb('disk_limit')
+    assert my_obj.convert_to_kb_or_bytes('disk_limit')
     print(my_obj.parameters)
     assert my_obj.parameters['disk_limit'] == str(10 * 1024 * 1024 * 1024)
     my_obj.parameters['disk_limit'] = ''
-    assert not my_obj.convert_to_kb('disk_limit')
+    assert not my_obj.convert_to_kb_or_bytes('disk_limit')
     print(my_obj.parameters)
     assert my_obj.parameters['disk_limit'] == ''
 
@@ -311,9 +395,393 @@ def test_has_netapp_lib(has_netapp_lib):
 
 def create_from_main():
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'quota-list-entries-iter', ZRR['no_records']),
         ('ZAPI', 'quota-status', ZRR['quota_on']),
         ('ZAPI', 'quota-set-entry', ZRR['success']),
     ])
     assert call_main(my_main, DEFAULT_ARGS)['changed']
+
+
+ARGS_REST = {
+    'hostname': 'test',
+    'username': 'test_user',
+    'password': 'test_pass!',
+    'use_rest': 'always',
+    'volume': 'ansible',
+    'vserver': 'ansible',
+    'quota_target': 'quota_user',
+    'type': 'user'
+}
+
+
+def test_rest_error_get():
+    '''Test error rest get'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['generic_error']),
+    ])
+    error = create_and_apply(my_module, ARGS_REST, fail=True)['msg']
+    assert 'Error on getting quota rule info' in error
+
+
+def test_rest_successful_create():
+    '''Test successful rest create'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['empty_records']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('POST', 'storage/quota/rules', SRR['empty_good']),
+    ])
+    module_args = {
+        "users": [{"name": "quota_user"}],
+    }
+    assert create_and_apply(my_module, ARGS_REST)
+
+
+def test_rest_error_create():
+    '''Test error rest create'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['empty_records']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('POST', 'storage/quota/rules', SRR['generic_error']),
+    ])
+    error = create_and_apply(my_module, ARGS_REST, fail=True)['msg']
+    assert 'Error on creating quotas rule:' in error
+
+
+def test_delete_rest():
+    ''' Test delete with rest API'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('DELETE', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['empty_good']),
+    ])
+    module_args = {
+        'state': 'absent'
+    }
+    assert create_and_apply(my_module, ARGS_REST, module_args)
+
+
+def test_error_delete_rest():
+    ''' Test error delete with rest API'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('DELETE', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['generic_error']),
+    ])
+    module_args = {
+        'state': 'absent'
+    }
+    error = create_and_apply(my_module, ARGS_REST, module_args, fail=True)['msg']
+    assert 'Error on deleting quotas rule:' in error
+
+
+def test_modify_files_limit_rest():
+    ''' Test modify with rest API'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_on']),
+        ('PATCH', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['empty_good']),
+    ])
+    module_args = {
+        "file_limit": "122", "soft_file_limit": "90"
+    }
+    assert create_and_apply(my_module, ARGS_REST, module_args)
+
+
+def test_modify_space_limit_rest():
+    ''' Test modify with rest API'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_on']),
+        ('PATCH', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['empty_good']),
+    ])
+    module_args = {
+        "disk_limit": "1024", "soft_disk_limit": "80"
+    }
+    assert create_and_apply(my_module, ARGS_REST, module_args)
+
+
+def test_modify_rest_error():
+    ''' Test negative modify with rest API'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('PATCH', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['generic_error']),
+    ])
+    module_args = {
+        'perform_user_mapping': True
+    }
+    error = create_and_apply(my_module, ARGS_REST, module_args, fail=True)['msg']
+    assert 'Error on modifying quotas rule:' in error
+
+
+def test_rest_successful_create_idempotency():
+    '''Test successful rest create'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record_0_empty_limtis']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record_0_empty_limtis']),
+        ('GET', 'storage/volumes', SRR['quota_status'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST)['changed'] is False
+    module_args = {
+        "disk_limit": "0", "soft_disk_limit": "-", "file_limit": 0, "soft_file_limit": "-"
+    }
+    assert create_and_apply(my_module, ARGS_REST, module_args)['changed'] is False
+    module_args = {
+        "disk_limit": "0", "soft_disk_limit": "-1", "file_limit": "0", "soft_file_limit": "-1"
+    }
+    assert create_and_apply(my_module, ARGS_REST, module_args)['changed'] is False
+
+
+def test_rest_successful_delete_idempotency():
+    '''Test successful rest delete'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['empty_records']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+    ])
+    module_args = {'use_rest': 'always', 'state': 'absent'}
+    assert create_and_apply(my_module, ARGS_REST, module_args)['changed'] is False
+
+
+def test_modify_quota_status_rest():
+    ''' Test modify quota status and error with rest API'''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('PATCH', 'storage/volumes/264a9e0b-2e03-11e9-a610-005056a7b72da', SRR['empty_good'])
+    ])
+    module_args = {"set_quota_status": "on"}
+    assert create_and_apply(my_module, ARGS_REST, module_args)
+
+
+def test_error_convert_size_format_rest():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'cluster', SRR['is_rest']),
+    ])
+    module_args = {
+        'disk_limit': '10MBi',
+        'quota_target': ''
+    }
+    error = create_module(my_module, ARGS_REST, module_args, fail=True)['msg']
+    assert error.startswith('disk_limit input string is not a valid size format')
+    module_args = {
+        'soft_disk_limit': 'MBi',
+        'quota_target': ''
+    }
+    error = create_module(my_module, ARGS_REST, module_args, fail=True)['msg']
+    assert error.startswith('soft_disk_limit input string is not a valid size format')
+    module_args = {
+        'soft_disk_limit': '10MB10',
+        'quota_target': ''
+    }
+    error = create_module(my_module, ARGS_REST, module_args, fail=True)['msg']
+    assert error.startswith('soft_disk_limit input string is not a valid size format')
+
+
+def test_convert_size_format_rest():
+    module_args = {'disk_limit': '10MB'}
+    my_obj = create_module(my_module, DEFAULT_ARGS, module_args)
+    assert my_obj.convert_to_kb_or_bytes('disk_limit')
+    print(my_obj.parameters)
+    assert my_obj.parameters['disk_limit'] == '10240'
+    my_obj.parameters['disk_limit'] = '10'
+    assert my_obj.convert_to_kb_or_bytes('disk_limit')
+    print(my_obj.parameters)
+    assert my_obj.parameters['disk_limit'] == '10'
+    my_obj.parameters['disk_limit'] = '10tB'
+    assert my_obj.convert_to_kb_or_bytes('disk_limit')
+    print(my_obj.parameters)
+    assert my_obj.parameters['disk_limit'] == str(10 * 1024 * 1024 * 1024)
+    my_obj.parameters['disk_limit'] = ''
+    assert not my_obj.convert_to_kb_or_bytes('disk_limit')
+    print(my_obj.parameters)
+    assert my_obj.parameters['disk_limit'] == ''
+
+
+def test_warning_rest_delete_5308572():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('DELETE', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['error_5308572'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST, {'state': 'absent'})['changed']
+    # assert 'Error on deleting quotas rule:' in error
+    msg = "Quota policy rule delete opertation succeeded. However the rule is still being enforced. To stop enforcing, "\
+          "reinitialize(disable and enable again) the quota for volume ansible in SVM ansible."
+    assert_warning_was_raised(msg)
+
+
+@patch('time.sleep')
+def test_no_warning_rest_delete_5308572(sleep):
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_on']),
+        ('DELETE', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['error_5308572']),
+        ('PATCH', 'storage/volumes/264a9e0b-2e03-11e9-a610-005056a7b72da', SRR['success']),
+        ('PATCH', 'storage/volumes/264a9e0b-2e03-11e9-a610-005056a7b72da', SRR['success'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST, {'state': 'absent', 'activate_quota_on_change': 'reinitialize'})['changed']
+    assert_no_warnings()
+
+
+def test_warning_rest_delete_5308569():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('DELETE', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['error_5308569'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST, {'state': 'absent'})['changed']
+    # assert 'Error on deleting quotas rule:' in error
+    msg = "Quota policy rule delete opertation succeeded. However quota resize failed due to an internal error. To make quotas active, "\
+          "reinitialize(disable and enable again) the quota for volume ansible in SVM ansible."
+    assert_warning_was_raised(msg)
+
+
+@patch('time.sleep')
+def test_no_warning_rest_delete_5308569(sleep):
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_on']),
+        ('DELETE', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['error_5308569']),
+        ('PATCH', 'storage/volumes/264a9e0b-2e03-11e9-a610-005056a7b72da', SRR['success']),
+        ('PATCH', 'storage/volumes/264a9e0b-2e03-11e9-a610-005056a7b72da', SRR['success'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST, {'state': 'absent', 'activate_quota_on_change': 'reinitialize'})['changed']
+    assert_no_warnings()
+
+
+def test_warning_rest_create_5308568():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['empty_records']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('POST', 'storage/quota/rules', SRR['error_5308568']),
+        ('GET', 'storage/volumes', SRR['volume_uuid'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST)['changed']
+    msg = "Quota policy rule create opertation succeeded. However quota resize failed due to an internal error. To make quotas active, "\
+          "reinitialize(disable and enable again) the quota for volume ansible in SVM ansible."
+    assert_warning_was_raised(msg)
+
+
+@patch('time.sleep')
+def test_no_warning_rest_create_5308568(sleep):
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['empty_records']),
+        ('GET', 'storage/volumes', SRR['quota_on']),
+        ('POST', 'storage/quota/rules', SRR['error_5308568']),
+        ('GET', 'storage/volumes', SRR['volume_uuid']),
+        ('PATCH', 'storage/volumes/sdgthfd', SRR['success']),
+        ('PATCH', 'storage/volumes/sdgthfd', SRR['success'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST, {'activate_quota_on_change': 'reinitialize'})['changed']
+    assert_no_warnings()
+
+
+def test_warning_rest_create_5308571():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['empty_records']),
+        ('GET', 'storage/volumes', SRR['quota_status']),
+        ('POST', 'storage/quota/rules', SRR['error_5308571']),
+        ('GET', 'storage/volumes', SRR['volume_uuid'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST)['changed']
+    msg = "Quota policy rule create opertation succeeded. but quota resize is skipped. To make quotas active, "\
+          "reinitialize(disable and enable again) the quota for volume ansible in SVM ansible."
+    assert_warning_was_raised(msg)
+
+
+@patch('time.sleep')
+def test_no_warning_rest_create_5308571(sleep):
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['empty_records']),
+        ('GET', 'storage/volumes', SRR['quota_on']),
+        ('POST', 'storage/quota/rules', SRR['error_5308568']),
+        ('GET', 'storage/volumes', SRR['volume_uuid']),
+        ('PATCH', 'storage/volumes/sdgthfd', SRR['success']),
+        ('PATCH', 'storage/volumes/sdgthfd', SRR['success'])
+    ])
+    assert create_and_apply(my_module, ARGS_REST, {'activate_quota_on_change': 'reinitialize'})['changed']
+    assert_no_warnings()
+
+
+def test_warning_rest_modify_5308567():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_on']),
+        ('PATCH', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['error_5308567']),
+    ])
+    module_args = {"soft_file_limit": "100"}
+    assert create_and_apply(my_module, ARGS_REST, module_args)
+    msg = "Quota policy rule modify opertation succeeded. However quota resize failed due to an internal error. To make quotas active, "\
+          "reinitialize(disable and enable again) the quota for volume ansible in SVM ansible."
+    assert_warning_was_raised(msg)
+
+
+@patch('time.sleep')
+def test_no_warning_rest_modify_5308567(sleep):
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/quota/rules', SRR['quota_record']),
+        ('GET', 'storage/volumes', SRR['quota_on']),
+        ('PATCH', 'storage/quota/rules/264a9e0b-2e03-11e9-a610-005056a7b72d', SRR['error_5308567']),
+        ('PATCH', 'storage/volumes/264a9e0b-2e03-11e9-a610-005056a7b72da', SRR['success']),
+        ('PATCH', 'storage/volumes/264a9e0b-2e03-11e9-a610-005056a7b72da', SRR['success'])
+    ])
+    module_args = {"soft_file_limit": "100", 'activate_quota_on_change': 'reinitialize'}
+    assert create_and_apply(my_module, ARGS_REST, module_args)['changed']
+    assert_no_warnings()
+
+
+def test_if_all_methods_catch_exception_rest():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_9_10_1']),
+        ('GET', 'storage/quota/rules', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['empty_records']),
+        ('POST', 'storage/quota/rules', SRR['generic_error']),
+        ('DELETE', 'storage/quota/rules/abdcdef', SRR['generic_error']),
+        ('PATCH', 'storage/quota/rules/abdcdef', SRR['generic_error']),
+        ('PATCH', 'storage/volumes/ghijklmn', SRR['generic_error']),
+        ('GET', 'cluster', SRR['is_rest_9_10_1']),
+
+    ])
+    my_obj = create_module(my_module, ARGS_REST)
+    my_obj.quota_uuid = 'abdcdef'
+    my_obj.volume_uuid = 'ghijklmn'
+    assert 'Error on getting quota rule info' in expect_and_capture_ansible_exception(my_obj.get_quotas_rest, 'fail')['msg']
+    assert 'Error on getting quota status info' in expect_and_capture_ansible_exception(my_obj.get_quota_status_or_volume_id_rest, 'fail')['msg']
+    assert 'Error on getting volume' in expect_and_capture_ansible_exception(my_obj.get_quota_status_or_volume_id_rest, 'fail', True)['msg']
+    assert 'does not exist' in expect_and_capture_ansible_exception(my_obj.get_quota_status_or_volume_id_rest, 'fail', True)['msg']
+    assert 'Error on creating quotas rule' in expect_and_capture_ansible_exception(my_obj.quota_entry_set_rest, 'fail')['msg']
+    assert 'Error on deleting quotas rule' in expect_and_capture_ansible_exception(my_obj.quota_entry_delete_rest, 'fail')['msg']
+    assert 'Error on modifying quotas rule' in expect_and_capture_ansible_exception(my_obj.quota_entry_modify_rest, 'fail', {})['msg']
+    assert 'Error setting quota-on for ansible' in expect_and_capture_ansible_exception(my_obj.on_or_off_quota_rest, 'fail', 'quota-on')['msg']
+    error = "Error: Qtree cannot be specified for a tree type rule"
+    assert error in create_module(my_module, ARGS_REST, {'qtree': 'qtree1', 'type': 'tree'}, fail=True)['msg']

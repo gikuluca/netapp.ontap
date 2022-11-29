@@ -14,7 +14,7 @@ DOCUMENTATION = '''
 module: na_ontap_broadcast_domain_ports
 short_description: NetApp ONTAP manage broadcast domain ports
 extends_documentation_fragment:
-    - netapp.ontap.netapp.na_ontap
+    - netapp.ontap.netapp.na_ontap_zapi
 version_added: 2.6.0
 author: NetApp Ansible Team (@carchi8py) <ng-ansibleteam@netapp.com>
 description:
@@ -86,7 +86,7 @@ class NetAppOntapBroadcastDomainPorts(object):
         """
             Initialize the Ontap Net Route class
         """
-        self.argument_spec = netapp_utils.na_ontap_host_argument_spec()
+        self.argument_spec = netapp_utils.na_ontap_zapi_only_spec()
         self.argument_spec.update(dict(
             state=dict(required=False, type='str', choices=['present', 'absent'], default='present'),
             broadcast_domain=dict(required=True, type='str'),
@@ -100,6 +100,7 @@ class NetAppOntapBroadcastDomainPorts(object):
         )
         parameters = self.module.params
         self.na_helper = NetAppModule(self.module)
+        self.na_helper.module_replaces('na_ontap_ports', self.module)
         msg = 'The module only supports ZAPI and is deprecated; netapp.ontap.na_ontap_ports should be used instead.'
         self.na_helper.fall_back_to_zapi(self.module, msg, parameters)
 
@@ -195,7 +196,6 @@ class NetAppOntapBroadcastDomainPorts(object):
         broadcast_domain_details = self.get_broadcast_domain_ports()
         results = netapp_utils.get_cserver(self.server)
         cserver = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=results)
-        netapp_utils.ems_log_event("na_ontap_broadcast_domain_ports", cserver)
         if broadcast_domain_details is None:
             self.module.fail_json(msg='Error broadcast domain not found: %s' % self.broadcast_domain)
         if self.state == 'present':  # execute create

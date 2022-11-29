@@ -136,8 +136,7 @@ class NetAppOntapMccipMediator(object):
         params = {
             'ip_address': self.parameters['mediator_address'],
             'password': self.parameters['mediator_password'],
-            'user': self.parameters['mediator_user'],
-            'uuid': current_uuid
+            'user': self.parameters['mediator_user']
         }
         dummy, error = self.rest_api.delete(api, params)
         if error:
@@ -170,7 +169,8 @@ class NetAppOntapMccipMediator(object):
                     self.add_mediator()
                 elif cd_action == 'delete':
                     self.remove_mediator(current)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action)
+        self.module.exit_json(**result)
 
 
 def main():

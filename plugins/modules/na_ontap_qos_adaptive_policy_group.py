@@ -12,7 +12,7 @@ DOCUMENTATION = '''
 module: na_ontap_qos_adaptive_policy_group
 short_description: NetApp ONTAP Adaptive Quality of Service policy group.
 extends_documentation_fragment:
-  - netapp.ontap.netapp.na_ontap
+  - netapp.ontap.netapp.na_ontap_zapi
 version_added: 2.9.0
 author: NetApp Ansible Team (@joshedmonds) <ng-ansibleteam@netapp.com>
 
@@ -143,7 +143,7 @@ class NetAppOntapAdaptiveQosPolicyGroup:
         """
         Initialize the Ontap qos policy group class.
         """
-        self.argument_spec = netapp_utils.na_ontap_host_argument_spec()
+        self.argument_spec = netapp_utils.na_ontap_zapi_only_spec()
         self.argument_spec.update(dict(
             state=dict(required=False, type='str', choices=['present', 'absent'], default='present'),
             name=dict(required=True, type='str'),
@@ -162,6 +162,7 @@ class NetAppOntapAdaptiveQosPolicyGroup:
         )
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
+        self.na_helper.module_replaces('na_ontap_qos_policy_group', self.module)
         msg = 'The module only supports ZAPI and is deprecated; netapp.ontap.na_ontap_qos_policy_group should be used instead.'
         self.na_helper.fall_back_to_zapi(self.module, msg, self.parameters)
 
@@ -289,7 +290,6 @@ class NetAppOntapAdaptiveQosPolicyGroup:
         """
         Run module based on playbook
         """
-        self.autosupport_log("na_ontap_qos_policy_group")
         current = self.get_policy_group()
         rename, cd_action = None, None
         if self.parameters.get('from_name'):
@@ -306,14 +306,8 @@ class NetAppOntapAdaptiveQosPolicyGroup:
                 self.delete_policy_group()
             elif modify:
                 self.modify_helper(modify)
-        self.module.exit_json(changed=self.na_helper.changed)
-
-    def autosupport_log(self, event_name):
-        """
-        Create a log event against the provided vserver
-        """
-        server = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=self.parameters['vserver'])
-        netapp_utils.ems_log_event(event_name, server)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

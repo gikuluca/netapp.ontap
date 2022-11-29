@@ -134,7 +134,7 @@ class NetAppOntapQuotaPolicy(object):
         # set up variables
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
-
+        self.na_helper.module_deprecated(self.module)
         if HAS_NETAPP_LIB is False:
             self.module.fail_json(msg='The python NetApp-Lib module is required')
         else:
@@ -205,7 +205,6 @@ class NetAppOntapQuotaPolicy(object):
                                   exception=traceback.format_exc())
 
     def apply(self):
-        netapp_utils.ems_log_event("na_ontap_quota_policy", self.server)
         current = self.get_quota_policy()
         # rename and create are mutually exclusive
         rename, cd_action = None, None
@@ -240,7 +239,8 @@ class NetAppOntapQuotaPolicy(object):
                 self.delete_quota_policy()
             if assign_policy:
                 zapis_svm.modify_vserver(self.server, self.module, self.parameters['vserver'], modify=dict(quota_policy=self.parameters['name']))
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action)
+        self.module.exit_json(**result)
 
 
 def main():

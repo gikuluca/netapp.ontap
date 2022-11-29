@@ -1,4 +1,4 @@
-# (c) 2020, NetApp, Inc
+# (c) 2020-2022, NetApp, Inc
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 ''' unit test template for ONTAP Ansible module '''
@@ -10,11 +10,11 @@ __metaclass__ = type
 import copy
 import pytest
 
-from ansible_collections.netapp.ontap.tests.unit.compat import unittest
-from ansible_collections.netapp.ontap.tests.unit.compat.mock import patch, Mock
+from ansible_collections.netapp.ontap.tests.unit.compat.mock import patch
 import ansible_collections.netapp.ontap.plugins.module_utils.netapp as netapp_utils
-from ansible_collections.netapp.ontap.tests.unit.plugins.module_utils.ansible_mocks import call_main, create_and_apply, expect_and_capture_ansible_exception,\
-    patch_ansible, create_module, assert_warning_was_raised, print_warnings
+from ansible_collections.netapp.ontap.tests.unit.plugins.module_utils.ansible_mocks import\
+    assert_no_warnings, assert_warning_was_raised, print_warnings, call_main, create_and_apply,\
+    create_module, expect_and_capture_ansible_exception, patch_ansible
 from ansible_collections.netapp.ontap.tests.unit.framework.mock_rest_and_zapi_requests import\
     patch_request_and_invoke, register_responses
 from ansible_collections.netapp.ontap.tests.unit.framework.rest_factory import rest_responses
@@ -85,6 +85,9 @@ volume_info = {
     },
     "snaplock": {
         "type": "non_snaplock"
+    },
+    "analytics": {
+        "state": "on"
     }
 }
 
@@ -96,6 +99,10 @@ volume_info_encrypt_off['encryption']['enabled'] = False
 volume_info_sl_enterprise = copy.deepcopy(volume_info)
 volume_info_sl_enterprise['snaplock']['type'] = 'enterprise'
 volume_info_sl_enterprise['snaplock']['retention'] = {'default': 'P30Y'}
+volume_analytics_disabled = copy.deepcopy(volume_info)
+volume_analytics_disabled['analytics']['state'] = 'off'
+volume_analytics_initializing = copy.deepcopy(volume_info)
+volume_analytics_initializing['analytics']['state'] = 'initializing'
 
 # REST API canned responses when mocking send_request
 SRR = rest_responses({
@@ -133,6 +140,12 @@ SRR = rest_responses({
                                   {'records': ['one']}, None),
     'get_aggr_two_object_stores': (200,
                                    {'records': ['two']}, None),
+    'move_state_replicating': (200, {'movement': {'state': 'replicating'}}, None),
+    'move_state_success': (200, {'movement': {'state': 'success'}}, None),
+    'encrypting': (200, {'encryption': {'status': {'message': 'initializing'}}}, None),
+    'encrypted': (200, {'encryption': {'state': 'encrypted'}}, None),
+    'analytics_off': (200, {'records': [volume_analytics_disabled]}, None),
+    'analytics_initializing': (200, {'records': [volume_analytics_initializing]}, None),
 })
 
 DEFAULT_APP_ARGS = {
@@ -281,6 +294,23 @@ def test_rest_successfully_deleted():
     ])
     module_args = {'state': 'absent'}
     assert create_and_apply(volume_module, DEFAULT_APP_ARGS, module_args)['changed']
+    assert_no_warnings()
+
+
+def test_rest_successfully_deleted_with_warning():
+    ''' delete volume using REST - no app - unmount failed
+    '''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['get_volume']),              # Get Volume
+        ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['generic_error']),    # PATCH storage/volumes - unmount
+        ('DELETE', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['empty_good']),      # DELETE storage/volumes
+    ])
+    module_args = {'state': 'absent'}
+    assert create_and_apply(volume_module, DEFAULT_APP_ARGS, module_args)['changed']
+    print_warnings()
+    assert_warning_was_raised('Volume was successfully deleted though unmount failed with: calling: '
+                              'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa: got Expected error.')
 
 
 def test_rest_successfully_deleted_with_app():
@@ -344,7 +374,7 @@ def test_rest_error_volume_unmount_rest():
         ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['generic_error']),    # Mount Volume
     ])
     module_args = {'junction_path': ''}
-    msg = 'Error unmounting volume test_svm: with path "", calling: storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa: got Expected error.'
+    msg = 'Error unmounting volume test_svm with path "": calling: storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa: got Expected error.'
     assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg'] == msg
 
 
@@ -374,7 +404,7 @@ def test_rest_error_volume_mount_rest():
         ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['generic_error']),    # Mount Volume
     ])
     module_args = {'junction_path': '/this/path'}
-    msg = "Error mounting volume test_svm: calling: storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa: got Expected error."
+    msg = 'Error mounting volume test_svm with path "/this/path": calling: storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa: got Expected error.'
     assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg'] == msg
 
 
@@ -648,14 +678,37 @@ def test_rest_successfully_create_volume_encrypt():
     assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, module_args)['changed']
 
 
-def test_rest_successfully_modify_volume_encrypt():
+@patch('time.sleep')
+def test_rest_successfully_modify_volume_encrypt(sleep):
     register_responses([
         ('GET', 'cluster', SRR['is_rest']),
         ('GET', 'storage/volumes', SRR['get_volume_encrypt_off']),  # Get Volume
         ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['no_record']),  # Set Encryption
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['get_volume_encrypt_off']),
+        ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['no_record']),
+        ('GET', 'storage/volumes', SRR['encrypting']),
+        ('GET', 'storage/volumes', SRR['encrypting']),
+        ('GET', 'storage/volumes', SRR['encrypting']),
+        ('GET', 'storage/volumes', SRR['encrypted']),
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['get_volume_encrypt_off']),
+        ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['no_record']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['get_volume'])
     ])
     module_args = {'encrypt': True}
     assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, module_args)['changed']
+    module_args = {'encrypt': True, 'wait_for_completion': True}
+    assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, module_args)['changed']
+    error = 'Error getting volume encryption_conversion status'
+    assert error in create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg']
+    error = 'unencrypting volume is only supported when moving the volume to another aggregate in REST'
+    assert error in create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, {'encrypt': False}, fail=True)['msg']
 
 
 def test_rest_error_modify_volume_encrypt():
@@ -725,8 +778,8 @@ def test_rest_error_modify_volume_efficiency_policy_with_ontap_96():
         ('GET', 'cluster', SRR['is_rest_96']),
     ])
     module_args = {'efficiency_policy': 'test'}
-    msg = "Minimum version of ONTAP for efficiency_policy is (9, 7)."
-    assert create_module(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg'] == msg
+    msg = "Error: Minimum version of ONTAP for efficiency_policy is (9, 7)."
+    assert msg in create_module(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg']
 
 
 def test_rest_error_modify_volume_tiering_minimum_cooling_days_98():
@@ -734,8 +787,8 @@ def test_rest_error_modify_volume_tiering_minimum_cooling_days_98():
         ('GET', 'cluster', SRR['is_rest_96']),
     ])
     module_args = {'tiering_minimum_cooling_days': 2}
-    msg = "Minimum version of ONTAP for tiering_minimum_cooling_days is (9, 8)."
-    assert create_module(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg'] == msg
+    msg = "Error: Minimum version of ONTAP for tiering_minimum_cooling_days is (9, 8)."
+    assert msg in create_module(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg']
 
 
 def test_rest_successfully_created_with_logical_space():
@@ -886,7 +939,7 @@ def test_snaplock_volume_create():
         ('POST', 'storage/volumes', SRR['empty_records']),
         ('GET', 'storage/volumes', SRR['get_volume_sl_enterprise']),
     ])
-    module_args = {'snaplock': {'type': 'enterprise'}}
+    module_args = {'snaplock': {'type': 'enterprise', 'retention': {'maximum': 'P5D'}}}
     assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, module_args)['changed']
 
 
@@ -934,16 +987,38 @@ def test_max_files_volume_modify():
 
 
 @patch('ansible_collections.netapp.ontap.plugins.module_utils.netapp.has_netapp_lib')
-def test_fallback_to_zapi_and_netapp_lib_missing(mock_has_netapp_lib):
-    """fallback to ZAPI when use_rest: auto"""
+def test_use_zapi_and_netapp_lib_missing(mock_has_netapp_lib):
+    """ZAPI requires netapp_lib"""
+    register_responses([
+    ])
+    mock_has_netapp_lib.return_value = False
+    module_args = {'use_rest': 'never'}
+    error = 'Error: the python NetApp-Lib module is required.  Import error: None'
+    assert create_module(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg'] == error
+
+
+def test_fallback_to_zapi_and_nas_application_is_used():
+    """fallback to ZAPI when use_rest: auto and some ZAPI only options are used"""
     register_responses([
         ('GET', 'cluster', SRR['is_rest_9_10_1']),
     ])
-    mock_has_netapp_lib.return_value = False
-    module_args = {'use_rest': 'auto'}
-    error = 'Error: the python NetApp-Lib module is required.  Import error: None'
+    module_args = {'use_rest': 'auto', 'cutover_action': 'wait', 'nas_application_template': {'storage_service': 'value'}}
+    error = "Error: nas_application_template requires REST support.  use_rest: auto.  "\
+            "Conflict because of unsupported option(s) or option value(s) in REST: ['cutover_action']."
     assert create_module(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg'] == error
-    assert_warning_was_raised('Falling back to ZAPI as REST support for na_ontap_volume is in beta and use_rest: auto.  Set use_rest: always to force REST.')
+    assert_warning_was_raised("Falling back to ZAPI because of unsupported option(s) or option value(s) in REST: ['cutover_action']")
+
+
+def test_fallback_to_zapi_and_rest_option_is_used():
+    """fallback to ZAPI when use_rest: auto and some ZAPI only options are used"""
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_9_10_1']),
+    ])
+    module_args = {'use_rest': 'auto', 'cutover_action': 'wait', 'sizing_method': 'use_existing_resources'}
+    error = "Error: sizing_method option is not supported with ZAPI.  It can only be used with REST.  use_rest: auto.  "\
+            "Conflict because of unsupported option(s) or option value(s) in REST: ['cutover_action']."
+    assert create_module(volume_module, DEFAULT_VOLUME_ARGS, module_args, fail=True)['msg'] == error
+    assert_warning_was_raised("Falling back to ZAPI because of unsupported option(s) or option value(s) in REST: ['cutover_action']")
 
 
 def test_error_conflict_export_policy_and_nfs_access():
@@ -1200,3 +1275,95 @@ def test_get_volume_style():
     my_obj = create_module(volume_module, args, module_args)
     assert my_obj.get_volume_style(None) == 'flexgroup'
     assert my_obj.parameters.get('aggr_list_multiplier') == 1
+
+
+def test_move_volume_with_rest_passthrough():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_9_8_0']),
+        ('PATCH', 'private/cli/volume/move/start', SRR['success']),
+        ('PATCH', 'private/cli/volume/move/start', SRR['generic_error']),
+    ])
+    module_args = {
+        'aggregate_name': 'aggr2'
+    }
+    obj = create_module(volume_module, DEFAULT_VOLUME_ARGS, module_args)
+    error = obj.move_volume_with_rest_passthrough(True)
+    assert error is None
+    error = obj.move_volume_with_rest_passthrough(True)
+    assert 'Expected error' in error
+
+
+def test_ignore_small_change():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_9_8_0']),
+    ])
+    obj = create_module(volume_module, DEFAULT_VOLUME_ARGS)
+    obj.parameters['attribute'] = 51
+    assert obj.ignore_small_change({'attribute': 50}, 'attribute', .5) is None
+    assert obj.parameters['attribute'] == 51
+    assert_no_warnings()
+    obj.parameters['attribute'] = 50.2
+    assert obj.ignore_small_change({'attribute': 50}, 'attribute', .5) is None
+    assert obj.parameters['attribute'] == 50
+    print_warnings()
+    assert_warning_was_raised('resize request for attribute ignored: 0.4% is below the threshold: 0.5%')
+
+
+def test_set_efficiency_rest_empty_body():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_9_8_0']),
+    ])
+    obj = create_module(volume_module, DEFAULT_VOLUME_ARGS)
+    # no action
+    assert obj.set_efficiency_rest() is None
+
+
+@patch('time.sleep')
+def test_volume_move_rest(sleep):
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_9_8_0']),
+        ('GET', 'storage/volumes', SRR['get_volume_mount']),
+        ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['success']),
+        ('GET', 'storage/volumes', SRR['move_state_replicating']),
+        ('GET', 'storage/volumes', SRR['move_state_success']),
+        # error when trying to get volume status
+        ('GET', 'cluster', SRR['is_rest_9_8_0']),
+        ('GET', 'storage/volumes', SRR['get_volume_mount']),
+        ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['success']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['generic_error']),
+        ('GET', 'storage/volumes', SRR['generic_error'])
+    ])
+    args = {'aggregate_name': 'aggr2', 'wait_for_completion': True, 'max_wait_time': 280}
+    assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, args)['changed']
+    error = "Error getting volume move status"
+    assert error in create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, args, fail=True)['msg']
+
+
+def test_analytics_option():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['no_record']),
+        ('POST', 'storage/volumes', SRR['success']),
+        ('GET', 'storage/volumes', SRR['get_volume']),
+        # idempotency check
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['get_volume']),
+        # Disable analytics
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['get_volume']),
+        ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['success']),
+        # Enable analytics
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['analytics_off']),
+        ('PATCH', 'storage/volumes/7882901a-1aef-11ec-a267-005056b30cfa', SRR['success']),
+        # Try to Enable analytics which is initializing(no change required.)
+        ('GET', 'cluster', SRR['is_rest']),
+        ('GET', 'storage/volumes', SRR['analytics_initializing'])
+    ])
+    assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, {'analytics': 'on'})['changed']
+    assert not create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, {'analytics': 'on'})['changed']
+    assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, {'analytics': 'off'})['changed']
+    assert create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, {'analytics': 'on'})['changed']
+    assert not create_and_apply(volume_module, DEFAULT_VOLUME_ARGS, {'analytics': 'on'})['changed']

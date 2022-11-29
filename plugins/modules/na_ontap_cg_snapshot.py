@@ -110,7 +110,8 @@ class NetAppONTAPCGSnapshot(object):
         self.timeout = parameters['timeout']
         self.snapmirror_label = parameters['snapmirror_label']
         self.cgid = None
-
+        self.module.warn('The module only supports ZAPI and is deprecated, and will no longer work with newer versions '
+                         'of ONTAP when ONTAPI is deprecated in CY22-Q4')
         if HAS_NETAPP_LIB is False:
             self.module.fail_json(
                 msg="the python NetApp-Lib module is required")
@@ -211,7 +212,6 @@ class NetAppONTAPCGSnapshot(object):
 
     def apply(self):
         '''Applies action from playbook'''
-        netapp_utils.ems_log_event("na_ontap_cg_snapshot", self.server)
         if not self.module.check_mode:
             changed = self.cgcreate()
         self.module.exit_json(changed=changed)

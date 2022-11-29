@@ -1,6 +1,7 @@
 [![Documentation](https://img.shields.io/badge/docs-brightgreen.svg)](https://docs.ansible.com/ansible/devel/collections/netapp/ontap/index.html)
 ![example workflow](https://github.com/ansible-collections/netapp.ontap/actions/workflows/main.yml/badge.svg)
 [![codecov](https://codecov.io/gh/ansible-collections/netapp.ontap/branch/main/graph/badge.svg?token=weBYkksxSi)](https://codecov.io/gh/ansible-collections/netapp.ontap)
+[![Discord](https://img.shields.io/discord/855068651522490400)](https://discord.gg/NetApp)
 
 =============================================================
 
@@ -31,52 +32,359 @@ collections:
 https://docs.ansible.com/ansible/devel/collections/netapp/ontap/
 
 # Need help
-Join our Slack Channel at [Netapp.io](http://netapp.io/slack)
+Join our [Discord](https://discord.gg/NetApp) and look for our #ansible channel.
+
+# Deprecation warning
+The 2022-Q4 will be the last ONTAP version to support ONTAPI (ZAPI). Future versions of ONTAP will only support REST. 
+This change will effect the modules listed below.
+
+### Replaced Modules
+These are modules user will need to migrate from their playbook to use the REST version of the module. Do note because REST
+return values differently than ZAPI you will need to update your playbooks to work with the new module.
+  - na_ontap_broadcast_domain_ports -> na_ontap_ports
+  - na_ontap_command -> na_ontap_rest_cli
+  - na_ontap_firewall_policy -> na_ontap_service_policy
+  - na_ontap_info -> na_ontap_rest_info
+  - na_ontap_ldap -> na_ontap_ldap_client
+  - na_ontap_motd -> na_ontap_login_messages
+  - na_ontap_ntfs_dacl -> na_ontap_file_security_permissions
+  - na_ontap_ntfs_sd -> na_ontap_file_security_permissions
+  - na_ontap_qos_adaptive_policy_group -> na_ontap_qos_policy_group
+  - na_ontap_volume_snaplock -> na_ontap_volume
+  - na_ontap_vserver_cifs_security -> na_ontap_cifs_server
+  - na_ontap_zapit -> na_ontap_restit
+
+### Deprecated Modules
+The following modules do not have REST equivalent APIs. They will stop working on any ONTAP release after CY22-Q4 release.
+  - na_ontap_active_directory
+  - na_ontap_cg_snapshot
+  - na_ontap_file_directory_policy
+  - na_ontap_svm_options
+  - na_ontap_quota_policy
+
 
 # Release Notes
 
-## 21.21.0
-  
-### New Module
-  - na_ontap_ntp_key - Manage NTP keys.
-
-### Added REST support to existing modules
-  - na_ontap_unix_group - added REST support.
-  - na_ontap_unix_user - Added REST support.
+## 22.1.0
 
 ### New Options
+  - na_ontap_interface - new option `probe_port` for Azure load balancer.
+
+### Minor Changes
+  - na_ontap_aggregate - add support for `service_state` option from ONTAP 9.11.1 or later in REST.
+  - na_ontap_aggregate - add `name` to modify in module output if aggregate is renamed.
+  - na_ontap_aggregate - error if `unmount_volumes` set in REST, by default REST unmount volumes when trying to offline aggregate.
+  - na_ontap_aggregate - fix examples in documentation.
+  - na_ontap_cifs_local_group_member - Added REST API support to retrieve, add and remove CIFS group member.
+  - na_ontap_cifs_local_group_member - REST support is from ONTAP 9.10.1 or later.
+  - na_ontap_cifs_server - skip `service_state` option in create if not set.
+  - na_ontap_quotas - for qtree type, allow quota_target in path format /vol/vol_name/qtree_name in REST.
+
+### Bug Fixes
+  - na_ontap_aggregate - allow adding disks before trying to offline aggregate.
+  - na_ontap_aggregate - fix `service_state` option skipped if its set to offline in create.
+  - na_ontap_cifs_server - fix `service_state` is stopped when trying to modify cifs server in REST.
+  - na_ontap_qtree - fix cannot get current qtree if enclosed in curly braces.
+  - na_ontap_quotas - fix default tree quota rule gets modified when `quota_target` is set in REST.
+  - na_ontap_quotas - fix user/group quota rule without qtree gets modified when `qtree` is set.
+
+### New Modules
+  - na_ontap_cifs_local_group - added REST only support for create, modify, rename and delete CIFS locl group of an SVM.
+  - na_ontap_security_ipsec_policy - Create, modify and delete security IPsec policy.
+
+## 22.0.1
+
+### Bug Fixes
+  - na_ontap_interface - fix `netmask` not idempotent in REST.
+  - na_ontap_mcc_mediator - Fix error that would prevent mediator deletion.
+
+### Minor Changes
+  - na_ontap_interface - allow setting `netmask` with netmask length in ZAPI.
+
+## 22.0.0
+
+### Major Changes
+  - With this release all modules except for the modules called up above now support REST.
+  - ZAPI calls will continue to work, but will return a warning that they are deprecated and users should migrate to REST.
+
+### New Rest Info
+  - na_ontap_rest_info - support added for protocols/active-directory.
+  - na_ontap_rest_info - support added for protocols/cifs/group-policies.
+  - na_ontap_rest_info - support added for protocols/nfs/connected-client-settings.
+  - na_ontap_rest_info - support added for security/aws-kms.
+
+### Minor Changes
+  - na_ontap_debug - report python executable version and path.
+  - na_ontap_net_routes - `metric` option is supported from ONTAP 9.11.0 or later in REST.
+  - na_ontap_service_policy - update services for 9.11.1 - make it easier to add new services.
+  - na_ontap_snapmirror - `schedule` is handled through `policy` for REST.
+  - na_ontap_snapmirror_policy - improve error reporting and report errors in check_mode.
+  - na_ontap_volume - `wait_for_completion` and `check_interval` is now supported for volume move and encryption in REST.
+
+### New Options
+  - na_ontap_export_policy_rule - `allow_suid`, `allow_device_creation` and `chown_mode` is now supported from ONTAP 9.9.1 or later in REST.
+  - na_ontap_export_policy_rule - `allow_device_creation` and `chown_mode` is now supported in ZAPI.
+  - na_ontap_ldap_client - new option `skip_config_validation`.
+  - na_ontap_service_policy - new options ``known_services`` and ``additional_services``.
+  - na_ontap_snapmirror_policy - new option `identity_preservation` added.
+  - na_ontap_snapmirror_policy - `name` added as an alias for `policy_name`.
+  - na_ontap_volume - new option `max_wait_time` added.
+  - na_ontap_volume - new REST option `analytics` added.
+  - tracing - allow to selectively trace headers and authentication.
+
+### Bug Fixes
+  - iso8601 filters - fix documentation generation issue.
+  - na_ontap_info - Added vserver in key_fields of net_interface_info.
+  - na_ontap_interface - fix error where an `address` with an IPV6 ip would try to modify each time playbook was run.
+  - na_ontap_ldap_client - `servers` not accepted when using ZAPI and `ldap_servers` not handling a single server properly.
+  - na_ontap_rest_info - fixed error where module would fail silently when using `owning_resouce` and a non-existent vserver.
+  - na_ontap_user_role - fixed Invalid JSON input. Expecting "privileges" to be an array.
+  - na_ontap_volume - fix error when trying to move encrypted volume and `encrypt` is True in REST.
+  - na_ontap_volume - fix error when trying to unencrypt volume in REST.
+  - na_ontap_volume - fix KeyError on `aggregate_name` when trying to unencrypt volume in ZAPI.
+  - na_ontap_volume - `snapdir_access` is not supported by REST and will currently inform you now if you try to use it with REST.
+  - na_ontap_volume - when deleting a volume, don't report a warning when unmount is successful (error is None).
+  - ZAPI only modules -- no longer have `use_rest` as an option.
+  - tracing - redact headers and authentication secrets by default.
+
+### New Modules
+  - na_ontap_local_hosts - added REST only support for create, update and delete IP to hostname mappings for SVM of the cluster.
+  - na_ontap_bgp_peer_group - Create, modify and delete BGP peer groups.
+  - na_ontap_file_security_permissions - Update SD and ACLs.
+  - na_ontap_file_security_permissions_acl - Add, update, or delete a single ACL.
+  - na_ontap_name_mappings - added REST only support for create, update and delete name mappings configuration.
+
+## 21.24.1
+
+### Bug Fixes
+  - new meta/execution-environment.yml is failing ansible-builder sanitize step.
+
+## 21.24.0
+
+### New Options
+  - na_ontap_cluster - `timezone.name` to modify cluster timezone. REST only.
+  - na_ontap_restit - `files` and `accept_header` to support multipart/form-data for write and read.
+  - na_ontap_snmp_traphosts - Added `host` option in REST.
+  - na_ontap_svm - Added `ndmp` option to services in REST.
+
+### Minor Changes
+  - na_ontap_ems_destination - improve error messages - augment UT coverage (thanks to bielawb).
+  - na_ontap_interface - `dns_domain_name` is now supported from ONTAP 9.9.0 or later in REST.
+  - na_ontap_interface - `is_dns_update_enabled` is now supported from ONTAP 9.9.1 or later in REST.
+  - na_ontap_interface - attempt to set interface_type to `ip` when `protocols` is set to "none".
+  - na_ontap_vserver_create - `protocol` is now optional.  `role` is not set when protocol is absent.
+  - na_ontap_vserver_create - `firewall_policy` is not set when `service_policy` is present, as `service_policy` is preferred.
+  - na_ontap_vserver_create - added `interface_type`.  Only a value of `ip` is currently supported.
+  - na_ontap_vserver_create - added support for vserver management interface when using REST.
+  - na_ontap_rest_info - Allowed the support of multiple subsets and warn when using `**` in fields.
+
+### New Rest Info
+  - All REST GET's up to and including 9.11.1 that do not require a UUID/KEY to be past in are now supported
+  - na_ontap_rest_info - support added for cluster.
+  - na_ontap_rest_info - support added for cluster/counter/tables.
+  - na_ontap_rest_info - support added for cluster/licensing/capacity-pools.
+  - na_ontap_rest_info - support added for cluster/licensing/license-managers.
+  - na_ontap_rest_info - support added for cluster/metrocluster/svms.
+  - na_ontap_rest_info - support added for cluster/sensors.
+  - na_ontap_rest_info - support added for name-services/cache/group-membership/settings.
+  - na_ontap_rest_info - support added for name-services/cache/host/settings.
+  - na_ontap_rest_info - support added for name-services/cache/netgroup/settings.
+  - na_ontap_rest_info - support added for name-services/cache/setting.
+  - na_ontap_rest_info - support added for name-services/cache/unix-group/settings.
+  - na_ontap_rest_info - support added for name-services/ldap-schemas.
+  - na_ontap_rest_info - support added for network/fc/fabrics.
+  - na_ontap_rest_info - support added for network/fc/interfaces.
+  - na_ontap_rest_info - support added for network/fc/interfaces.
+  - na_ontap_rest_info - support added for network/ip/subnets.
+  - na_ontap_rest_info - support added for protocols/cifs/connections.
+  - na_ontap_rest_info - support added for protocols/cifs/netbios.
+  - na_ontap_rest_info - support added for protocols/cifs/session/files.
+  - na_ontap_rest_info - support added for protocols/cifs/shadow-copies.
+  - na_ontap_rest_info - support added for protocols/cifs/shadowcopy-sets.
+  - na_ontap_rest_info - support added for protocols/nfs/connected-client-maps.
+  - na_ontap_rest_info - support added for security.
+  - na_ontap_rest_info - support added for security/multi-admin-verify.
+  - na_ontap_rest_info - support added for security/multi-admin-verify/approval-groups.
+  - na_ontap_rest_info - support added for security/multi-admin-verify/requests.
+  - na_ontap_rest_info - support added for security/multi-admin-verify/rules.
+  - na_ontap_rest_info - support added for storage/file/moves.
+  - na_ontap_rest_info - support added for storage/pools.
+
+### Bug Fixes
+  - na_ontap_cifs - fix KeyError on `unix_symlink` field when using REST.
+  - na_ontap_cifs_acl - use `type` when deleting unix-user or unix-group from ACL in ZAPI.
+  - na_ontap_command - do not run command in check_mode (thanks to darksoul42).
+  - na_ontap_ems_destination - fix idempotency issue when `type` value is rest_api.
+  - na_ontap_interface - improve error message when interface type is required with REST.
+  - na_ontap_qtree - fix KeyError on unix_permissions.
+  - na_ontap_rest_cli - do not run command in check_mode (thanks to darksoul42).
+  - na_ontap_s3_groups - if `policies` is None module should no longer fail
+  - na_ontap_user - fix idempotency issue with 9.11 because of new is_ldap_fastbind field.
+  - na_ontap_volume_efficiency -- Missing fields in REST get should return None and not crash module.
+
+### Added REST support to existing modules
+  - na_ontap_quotas - added REST support.
+  - na_ontap_net_subnet - added REST support.
+
+### New Module
+  - na_ontap_security_ssh - Updates the SSH server configuration for cluster and SVM scopes - REST only.
+
+### New Filters
+  - iso8601_duration_to_seconds - to convert a duration in ISO 8601 format to seconds.
+  - iso8601_duration_from_seconds - to convert seconds to a duration in ISO 8601 format.
+
+## 21.23.0
+
+### New Options
+  - all REST modules - new option `force_ontap_version` to bypass permission issues with custom vsadmin roles.
+  - na_ontap_export_policy_rule - new option `force_delete_on_first_match` to support duplicate entries on delete.
+  - na_ontap_rest_info - new option `ignore_api_errors` to report error in subset rather than breaking execution.
+  - na_ontap_security_key_manager - new REST options `external` and `vserver` for external key manager.
+  - na_ontap_security_key_manager - new REST option `onboard` for onboard key manager.
+
+### New Rest Info
+  - na_ontap_rest_info - support added for protocols/vscan/on-access-policies.
+  - na_ontap_rest_info - support added for protocols/vscan/on-demand-policies.
+  - na_ontap_rest_info - support added for protocols/vscan/scanner-pools.
+
+### Bug Fixes
+  - na_ontap_cifs_acl - use `type` if present when fetching existing ACL with ZAPI.
+  - na_ontap_cifs_local_user_set_password - when using ZAPI, do not require cluster admin privileges.
+  - na_ontap_cluster_config Role - incorrect license was show - updated to GNU General Public License v3.0
+  - na_ontap_flexcache - properly use `origin_cluster` in GET but not in POST when using REST.
+  - na_ontap_kerberos_realm - fix cannot modify `comment` option in ZAPI.
+  - na_ontap_lun_copy - fix key error on `source_vserver` option.
+  - na_ontap_s3_buckets - fix options that cannot be modified if not set in creating s3 buckets.
+  - na_ontap_s3_buckets - fix TypeError if `conditions` not present in policy statements.
+  - na_ontap_s3_buckets - updated correct choices in options `audit_event_selector.access` and `audit_event_selector.permission`.
+  - na_ontap_ntp - fixed typeError on `key_id` field with ZAPI.
+
+### Minor Changes
+  - na_ontap_export_policy_rule - `rule_index` is now optional for create and delete.
+  - na_ontap_interface - improved validations for unsupported options with FC interfaces.
+  - na_ontap_kerberos_realm - change `kdc_port` option type to int.
+  - na_ontap_ntp - for ONTAP version 9.6 or below fall back to ZAPI when `use_rest` is set to `auto` or fail when REST is desired.
+  - na_ontap_ntp_key - fail for ONTAP version 9.6 or below when `use_rest` is set to `auto` or when REST is desired.
+  - na_ontap_volume - attempt to delete volume even when unmounting or offlining failed.
+
+### Added REST support to existing modules
+  - na_ontap_cifs_local_user_set_password -- added REST support.
+  - na_ontap_cluster_ha - added REST support.
+  - na_ontap_lun_copy - added REST support.
+  - na_ontap_lun_map_reporting_nodes - added REST support.
+  - na_ontap_kerberos_realm - added REST support.
+  - na_ontap_security_key_manager - added REST support.
+  - na_ontap_ucadapter - added REST support.
+  - na_ontap_user_role -- added REST support.
+
+### New Module
+  - na_ontap_ems_destination - Manage EMS destination - Contribution by Bartosz Bielawski (@bielawb).
+
+## 21.22.0
+
+### New Options
+  - na_ontap_job_schedule - new option `cluster` added.
+  - na_ontap_ldap_client - Added `ldaps_enabled` option in ZAPI.
+
+### Bug Fixes
+  - na_ontap_cluster_peer - report an error if there is an attempt to use the already peered clusters.
+  - na_ontap_interface - fix error deleting fc interface if it is enabled in REST.
+  - na_ontap_license - fix intermittent KeyError when adding licenses with REST.
+  - na_ontap_lun - Added `lun_modify` after `app_modify` to fix idempotency issue.
+  - na_ontap_name_service_switch - fix AttributeError 'NoneType' object has no attribute 'get_children' if `sources` is '-' in current.
+  - na_ontap_name_service_switch - fix idempotency issue on `sources` option.
+  - na_ontap_security_key_manager - fix KeyError on `node`.
+  - na_ontap_ntp - fixed typeError on `key_id` field with ZAPI.
+  - na_ontap_service_processor_network - fix idempotency issue on `dhcp` option in ZAPI.
+  - na_ontap_service_processor_network - fail module when trying to disable `dhcp` and not setting one of `ip_address`, `netmask`, `gateway_ip_address` different than current.
+  - na_ontap_service_processor_network - allow manually configuring network if all of `ip_address`, `netmask`, `gateway_ip_address` set and `dhcp` not present in REST.
+  - na_ontap_service_processor_network - fix setting ``dhcp`` v4 takes more than ``wait_for_completion`` retries.
+  - na_ontap_service_processor_network - fix ``wait_for_completion`` ignored when trying to enable service processor network interface in ZAPI.
+  - na_ontap_software_update - improve error handling if image file is already present.
+  - na_ontap_software_update - improve error handling when node is rebooting with REST.
+  - na_ontap_software_update - when using REST with ONTAP 9.9 or later, timeout value is properly set.
+  - na_ontap_user - enforce that all methods are under a single application.
+  - na_ontap_user - is_locked was not properly read with ZAPI, making the module not idempotent.
+
+### Minor Changes
+  - na_ontap_license - return list of updated package names.
+  - na_ontap_nvme_subsystem - report subsystem as absent if vserver cannot be found when attempting a delete.
+  - na_ontap_rest_info - Will now warn you if a `gather_subset` is not supported by your version of ONTAP.
+  - na_ontap_rest_info - Will now include a message in return output about `gather_subset` not supported by your version of ONTAP.
+  - na_ontap_security_key_manager - indicate that `node` is not used and is deprecated.
+  - na_ontap_software_update - deleting a software package is now supported with ZAPI and REST.
+  - na_ontap_svm - added vserver as a convenient alias for name when using module_defaults.
+  - na_ontap_wait_for_condition - added `snapmirror_relationship` to wait on `state` or `transfer_state` (REST only).
+  - na_ontap_ldap - fall back to ZAPI when `use_rest` is set to `auto` or fail when REST is desired.
+  - all modules - do not fail on ZAPI EMS log when vserver does not exist.
+
+### Added REST support to existing modules
+  - na_ontap_ldap_client - added REST support.
+  - na_ontap_name_service_switch - added REST support.
+  - na_ontap_wait_for_condition - added REST support.
+
+## 21.21.0
+
+### New Options
+  - na_ontap_cluster_config role - support `broadcast_domain` and `service_policy` with REST.
+  - na_ontap_interface - support `broadcast_domain` with REST.
   - na_ontap_lun - support `qos_adaptive_policy_group` with REST.
   - na_ontap_ntp - added `key_id` for both REST and ZAPI
   - na_ontap_qtree - added `unix_user` and `unix_group` options in REST.
   - na_ontap_snapmirror - new option `validate_source_path` to disable this validation.
   - na_ontap_unix_user - added new option `primary_gid` aliased to `group_id`.
+  - na_ontap_vserver_create role - support `broadcast_domain`, `ipspace`, and `service_policy` with REST.
 
 ### Bug Fixes
   - na_ontap_interface - enforce requirement for address/netmask for interfaces other than FC.
   - na_ontap_interface - fix idempotency issue for cluster scoped interfaces when using REST.
   - na_ontap_interface - fix potential node and uuid issues with LIF migration.
+  - na_ontap_interface - FC interfaces - scope is not supported.
+  - na_ontap_interface - FC interfaces - home_port is not supported for ONTAP 9.7 or earlier.
+  - na_ontap_interface - FC interfaces - home_node should not be sent as location.home_node.
+  - na_ontap_interface - FC interfaces - service_policy is not supported.
+  - na_ontap_interface - ignore 'none' when using REST rather than reporting unexpected protocol.
   - na_ontap_lun - catch ZAPI error on get LUN.
   - na_ontap_lun - ignore resize error if no change was required.
   - na_ontap_lun - report error if flexvol_name is missing when using ZAPI.
   - na_ontap_net_subnet - fix `ipspace` option ignored in getting net subnet.
   - na_ontap_qtree - fix idempotency issue on `unix_permissions` option.
+  - na_ontap_s3_buckets - accept `sid` as a number or a string.
+  - na_ontap_s3_buckets - Module will set `enabled` during create.
+  - na_ontap_s3_buckets - Module will not fail on create if no `policy` is given.
   - na_ontap_svm - KeyError on CIFS when using REST with ONTAP 9.8 or lower.
   - na_ontap_volume - fix idempotency issue on `unix_permissions` option.
+  - na_ontap_volume - `volume_security_style` was not modified if other security options were present with ZAPI.
   - na_ontap_vserver_create role - add rule index as it is now required.
   - na_ontap_snapmirror - relax check for source when using REST.
   - na_ontap_snapmirror - fix potential issue when destination is using REST but source is using ZAPI.
 
 ### New Module
-  - na_ontap_s3_policies - manage S3 policies.
+  - na_ontap_ntp_key - Manage NTP keys.
+  - na_ontap_s3_groups - Manage s3 groups.
+  - na_ontap_s3_policies - Manage S3 policies.
 
 ### Minor Changes
   - na_ontap_info - add quota-policy-info.
+  - na_ontap_info - add computed serial_hex and naa_id for lun_info.
   - na_ontap_login_messages - support cluster scope when using REST.
   - na_ontap_motd - deprecated in favor of `na_ontap_login_messages`.  Fail when use_rest is set to `always` as REST is not supported.
+  - na_ontap_rest_info - add computed serial_hex and naa_id for storage/luns when serial_number is present.
+  - na_ontap_s3_users - `secret_key` and `access_token` are now returned when creating a user.
   - na_ontap_snapmirror - validate source endpoint for ZAPI and REST, accounting for vserver local name.
   - na_ontap_snapmirror - improve errror messages to be more specific and consistent.
   - na_ontap_snapmirror - wait for the relationship to come back to idle after a resync.
   - na_ontap_user - accept `service_processor` as an alias for `service-processor` with ZAPI, to be consistent with REST.
+
+### Known Issues:
+  - na_ontap_snapshot - added documentation to use UTC format for `expiry_time`.
+
+### Added REST support to existing modules
+  - na_ontap_service_processor_network - Added REST support.
+  - na_ontap_unix_group - added REST support.
+  - na_ontap_unix_user - added REST support.
+  - na_ontap_volume - now defaults to REST with `use_rest: auto`, like every other module.  ZAPI can be forced with `use_rest: never`.
+
 
 ## 21.20.0
 

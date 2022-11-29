@@ -306,8 +306,6 @@ class NetAppOntapUnixUser:
 
         :return: None
         """
-        if not self.use_rest:
-            netapp_utils.ems_log_event("na_ontap_unix_user", self.server)
         cd_action = None
         current = self.get_unix_user_rest()
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
@@ -319,7 +317,8 @@ class NetAppOntapUnixUser:
                 self.delete_unix_user_rest(current)
             else:
                 self.modify_unix_user_rest(modify, current)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

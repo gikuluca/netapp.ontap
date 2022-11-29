@@ -19,7 +19,7 @@ module: na_ontap_volume_snaplock
 
 short_description: NetApp ONTAP manage volume snaplock retention.
 extends_documentation_fragment:
-    - netapp.ontap.netapp.na_ontap
+    - netapp.ontap.netapp.na_ontap_zapi
 version_added: '20.2.0'
 author: NetApp Ansible Team (@carchi8py) <ng-ansibleteam@netapp.com>
 description:
@@ -134,7 +134,7 @@ class NetAppOntapVolumeSnaplock(object):
     def __init__(self):
         '''Initialize module parameters'''
 
-        self.argument_spec = netapp_utils.na_ontap_host_argument_spec()
+        self.argument_spec = netapp_utils.na_ontap_zapi_only_spec()
         self.argument_spec.update(dict(
             name=dict(required=True, type='str'),
             vserver=dict(required=True, type='str'),
@@ -150,6 +150,7 @@ class NetAppOntapVolumeSnaplock(object):
         )
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
+        self.na_helper.module_replaces('na_ontap_volume', self.module)
 
         if HAS_NETAPP_LIB is False:
             self.module.fail_json(msg="the python NetApp-Lib module is required")
@@ -207,13 +208,13 @@ class NetAppOntapVolumeSnaplock(object):
                                   exception=traceback.format_exc())
 
     def apply(self):
-        netapp_utils.ems_log_event("na_ontap_volume_snaplock", self.server)
         current, modify = self.get_volume_snaplock_attrs(), None
         modify = self.na_helper.get_modified_attributes(current, self.parameters)
 
         if self.na_helper.changed and not self.module.check_mode:
             self.set_volume_snaplock_attrs(modify)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, modify=modify)
+        self.module.exit_json(**result)
 
 
 def main():

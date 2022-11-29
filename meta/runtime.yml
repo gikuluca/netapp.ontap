@@ -6,10 +6,12 @@ action_groups:
     - na_ontap_aggregate
     - na_ontap_autosupport_invoke
     - na_ontap_autosupport
+    - na_ontap_bgp_peer_group
     - na_ontap_broadcast_domain_ports
     - na_ontap_broadcast_domain
     - na_ontap_cg_snapshot
     - na_ontap_cifs_acl
+    - na_ontap_cifs_local_group
     - na_ontap_cifs_local_group_member
     - na_ontap_cifs_local_user_modify
     - na_ontap_cifs_local_user_set_password
@@ -25,6 +27,7 @@ action_groups:
     - na_ontap_dns
     - na_ontap_domain_tunnel
     - na_ontap_efficiency_policy
+    - na_ontap_ems_destination
     - na_ontap_export_policy
     - na_ontap_export_policy_rule
     - na_ontap_fcp
@@ -33,6 +36,8 @@ action_groups:
     - na_ontap_fdspt
     - na_ontap_fdss
     - na_ontap_file_directory_policy
+    - na_ontap_file_security_permissions
+    - na_ontap_file_security_permissions_acl
     - na_ontap_firewall_policy
     - na_ontap_firmware_upgrade
     - na_ontap_flexcache
@@ -53,6 +58,7 @@ action_groups:
     - na_ontap_ldap_client
     - na_ontap_ldap
     - na_ontap_license
+    - na_ontap_local_hosts
     - na_ontap_log_forward
     - na_ontap_login_messages
     - na_ontap_lun_copy
@@ -63,6 +69,7 @@ action_groups:
     - na_ontap_metrocluster_dr_group
     - na_ontap_metrocluster
     - na_ontap_motd
+    - na_ontap_name_mappings
     - na_ontap_name_service_switch
     - na_ontap_ndmp
     - na_ontap_net_ifgrp
@@ -93,12 +100,15 @@ action_groups:
     - na_ontap_rest_info
     - na_ontap_restit
     - na_ontap_s3_buckets
+    - na_ontap_s3_groups
     - na_ontap_s3_policies
     - na_ontap_s3_services
     - na_ontap_s3_users
     - na_ontap_security_certificates
     - na_ontap_security_config
+    - na_ontap_security_ipsec_policy
     - na_ontap_security_key_manager
+    - na_ontap_security_ssh
     - na_ontap_service_policy
     - na_ontap_service_processor_network
     - na_ontap_snaplock_clock

@@ -37,8 +37,11 @@ options:
   name:
     description:
       - The name of the SVM to manage.
+      - vserver is a convenient alias when using module_defaults.
     type: str
     required: true
+    aliases:
+      - vserver
 
   from_name:
     description:
@@ -82,23 +85,16 @@ options:
   allowed_protocols:
     description:
       - Allowed Protocols.
-      - When specified as part of a vserver-create,
-        this field represent the list of protocols allowed on the Vserver.
-      - When part of vserver-get-iter call,
-        this will return the list of Vservers
-        which have any of the protocols specified
-        as part of the allowed-protocols.
-      - When part of vserver-modify,
+      - This field represent the list of protocols allowed on the Vserver.
+      - When part of modify,
         this field should include the existing list
         along with new protocol list to be added to prevent data disruptions.
-      - ndmp is default in creation and can't be modified when using REST API.
-        Specify ndmp in task to maintain idempotency.
       - Possible values
       - nfs   NFS protocol,
       - cifs  CIFS protocol,
       - fcp   FCP protocol,
       - iscsi iSCSI protocol,
-      - ndmp  NDMP protocol - ZAPI only,
+      - ndmp  NDMP protocol,
       - http  HTTP protocol - ZAPI only,
       - nvme  NVMe protocol
     type: list
@@ -111,6 +107,7 @@ options:
       - C(enabled) is not supported for CIFS, to enable it use na_ontap_cifs_server.
       - If a service is not present, it is left unchanged.
     type: dict
+    version_added: 21.10.0
     suboptions:
       cifs:
         description:
@@ -164,8 +161,17 @@ options:
           enabled:
             description: If allowed, setting to true enables the NVMe service.
             type: bool
-    version_added: 21.10.0
-
+      ndmp:
+        description:
+          - Network Data Management Protocol service
+        type: dict
+        suboptions:
+          allowed:
+            description:
+              - If this is set to true, an SVM administrator can manage the NDMP service
+              - If it is false, only the cluster administrator can manage the service.
+            type: bool
+        version_added: 21.24.0
   aggr_list:
     description:
       - List of aggregates assigned for volume operations.
@@ -185,7 +191,6 @@ options:
     - Cannot be modified after creation.
     type: str
     version_added: 2.7.0
-
 
   snapshot_policy:
     description:
@@ -354,7 +359,7 @@ class NetAppOntapSVM():
         self.argument_spec = netapp_utils.na_ontap_host_argument_spec()
         self.argument_spec.update(dict(
             state=dict(required=False, type='str', choices=['present', 'absent'], default='present'),
-            name=dict(required=True, type='str'),
+            name=dict(required=True, type='str', aliases=['vserver']),
             from_name=dict(required=False, type='str'),
             admin_state=dict(required=False, type='str', choices=['running', 'stopped']),
             root_volume=dict(type='str'),
@@ -380,6 +385,7 @@ class NetAppOntapSVM():
                 fcp=dict(type='dict', options=dict(allowed=dict(type='bool'), enabled=dict(type='bool'))),
                 nfs=dict(type='dict', options=dict(allowed=dict(type='bool'), enabled=dict(type='bool'))),
                 nvme=dict(type='dict', options=dict(allowed=dict(type='bool'), enabled=dict(type='bool'))),
+                ndmp=dict(type='dict', options=dict(allowed=dict(type='bool'))),
             )),
             web=dict(type='dict', options=dict(
                 certificate=dict(type='str'),
@@ -445,7 +451,7 @@ class NetAppOntapSVM():
         if use_rest and 'aggr_list' in self.parameters and self.parameters['aggr_list'] == ['*']:
             self.module.warn("Using REST and ignoring aggr_list: '*'")
             del self.parameters['aggr_list']
-        if use_rest and self.parameters.get('allowed_protocols'):
+        if use_rest and self.parameters.get('allowed_protocols') is not None:
             # python 2.6 does not support dict comprehension with k: v
             self.parameters['services'] = dict(
                 # using old semantics, anything not present is disallowed
@@ -462,7 +468,9 @@ class NetAppOntapSVM():
             ]
             if errors:
                 self.module.fail_json(msg='Error - %s' % '  '.join(errors))
-
+        if use_rest and self.parameters.get('services') and not self.parameters.get('allowed_protocols'):
+            if self.parameters['services'].get('ndmp') and not self.rest_api.meets_rest_minimum_version(use_rest, 9, 7):
+                self.module.fail_json(msg=self.rest_api.options_require_ontap_version('ndmp', '9.7', use_rest=use_rest))
         if self.parameters.get('services') and not use_rest:
             self.module.fail_json(msg=self.rest_api.options_require_ontap_version('services', use_rest=use_rest))
         if self.parameters.get('web'):
@@ -587,6 +595,8 @@ class NetAppOntapSVM():
                 # certificate is available starting with 9.7 and is deprecated with 9.10.1.
                 # we don't use certificate with 9.7 as name is only supported with 9.8 in /security/certificates
                 fields += ',certificate'
+            if self.rest_api.meets_rest_minimum_version(self.use_rest, 9, 10, 1):
+                fields += ',ndmp'
 
             record, error = rest_vserver.get_vserver(self.rest_api, vserver_name, fields)
             if error:
@@ -819,6 +829,7 @@ class NetAppOntapSVM():
             'iscsi': 'protocols/san/iscsi/services',
             'nfs': 'protocols/nfs/services',
             'nvme': 'protocols/nvme/services',
+            'ndmp': 'protocols/ndmp/svms'
         }
         for protocol, config in modify['services'].items():
             enabled = config.get('enabled')
@@ -872,8 +883,6 @@ class NetAppOntapSVM():
 
     def apply(self):
         '''Call create/modify/delete operations.'''
-        if not self.use_rest:
-            netapp_utils.ems_log_event_cserver("na_ontap_svm", self.server, self.module)
         current = self.get_vserver()
         cd_action, rename = None, None
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
@@ -887,10 +896,6 @@ class NetAppOntapSVM():
                 current = old_svm
                 cd_action = None
         modify = self.na_helper.get_modified_attributes(current, self.parameters)
-        self.rest_api.log_debug('parameters', self.parameters)
-        self.rest_api.log_debug('current', current)
-        self.rest_api.log_debug('modify', modify)
-
         fixed_attributes = ['root_volume', 'root_volume_aggregate', 'root_volume_security_style', 'subtype', 'ipspace']
         msgs = ['%s - current: %s - desired: %s' % (attribute, current[attribute], self.parameters[attribute])
                 for attribute in fixed_attributes
@@ -915,13 +920,9 @@ class NetAppOntapSVM():
                 self.delete_vserver(current)
             if modify:
                 self.modify_vserver(modify, current)
-
-        results = dict(changed=self.na_helper.changed)
-        if modify:
-            if netapp_utils.has_feature(self.module, 'show_modified'):
-                results['modify'] = str(modify)
-            if 'aggr_list' in modify and '*' in modify['aggr_list']:
-                results['warnings'] = "Changed always 'True' when aggr_list is '*'."
+            if modify and 'aggr_list' in modify and '*' in modify['aggr_list']:
+                self.module.warn("na_ontap_svm: changed always 'True' when aggr_list is '*'.")
+        results = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
         self.module.exit_json(**results)
 
 

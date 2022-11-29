@@ -79,7 +79,7 @@ class NetAppONTAPSvnOptions(object):
 
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
-
+        self.na_helper.module_deprecated(self.module)
         if HAS_NETAPP_LIB is False:
             self.module.fail_json(msg="the python NetApp-Lib module is required")
         else:
@@ -138,7 +138,6 @@ class NetAppONTAPSvnOptions(object):
 
     def apply(self):
         changed = False
-        netapp_utils.ems_log_event("na_ontap_svm_options", self.server)
         is_set = self.is_option_set()
         if not is_set:
             if self.module.check_mode:

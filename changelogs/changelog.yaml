@@ -1631,16 +1631,16 @@ releases:
       bugfixes:
       - na_ontap_cluster_config - fix the role to be able to create intercluster LIFs
         with REST (ipspace is required).
-      - na_ontap_interface - ignore ``vserver`` when using REST if role is one of 'cluster',
-        'node-mgmt', 'intercluster', 'cluster-mgmt'.
+      - na_ontap_interface - ignore ``vserver`` when using REST if role is one of
+        'cluster', 'node-mgmt', 'intercluster', 'cluster-mgmt'.
       - na_ontap_nvme - fixed ``status_admin`` option is ignored if set to False when
         creating nvme service in REST.
       - na_ontap_nvme - fixed invalid boolean value error for ``status_admin`` when
         creating nvme service in ZAPI.
-      - na_ontap_service_policy - fixed error in modify by changing resulting json of
-        an existing record in REST.
-      - na_ontap_snapmirror - when using REST with a policy, fix AttributeError - 'str'
-        object has no attribute 'get'.
+      - na_ontap_service_policy - fixed error in modify by changing resulting json
+        of an existing record in REST.
+      - na_ontap_snapmirror - when using REST with a policy, fix AttributeError -
+        'str' object has no attribute 'get'.
       - na_ontap_snapmirror - when using ZAPI, wait for the relationship to be quiesced
         before breaking.
     fragments:
@@ -1814,6 +1814,372 @@ releases:
       name: na_ontap_s3_users
       namespace: ''
     release_date: '2022-06-08'
+  21.21.0:
+    changes:
+      bugfixes:
+      - na_ontap_interface - FC interfaces - home_node should not be sent as location.home_node.
+      - na_ontap_interface - FC interfaces - home_port is not supported for ONTAP
+        9.7 or earlier.
+      - na_ontap_interface - FC interfaces - scope is not supported.
+      - na_ontap_interface - FC interfaces - service_policy is not supported.
+      - na_ontap_interface - enforce requirement for address/netmask for interfaces
+        other than FC.
+      - na_ontap_interface - fix idempotency issue for cluster scoped interfaces when
+        using REST.
+      - na_ontap_interface - fix potential node and uuid issues with LIF migration.
+      - na_ontap_interface - ignore 'none' when using REST rather than reporting unexpected
+        protocol.
+      - na_ontap_lun - catch ZAPI error on get LUN.
+      - na_ontap_lun - ignore resize error if no change was required.
+      - na_ontap_lun - report error if flexvol_name is missing when using ZAPI.
+      - na_ontap_net_subnet - fixed ``ipspace`` option ignored in getting net subnet.
+      - na_ontap_qtree - fix idempotency issue on ``unix_permissions`` option.
+      - na_ontap_s3_buckets - Module will not fail on create if no ``policy`` is given.
+      - na_ontap_s3_buckets - Module will set ``enabled`` during create.
+      - na_ontap_s3_buckets - Module work currently when ``sid`` is a number.
+      - na_ontap_snapmirror - fix potential issue when destination is using REST but
+        source is using ZAPI.
+      - na_ontap_snapmirror - relax check for source when using REST.
+      - na_ontap_svm - KeyError on CIFS when using REST with ONTAP 9.8 or lower.
+      - na_ontap_volume - ``volume_security_style`` was not modified if other security
+        options were present with ZAPI.
+      - na_ontap_volume - fix idempotency issue on ``unix_permissions`` option.
+      - na_ontap_vserver_create role - add rule index as it is now required.
+      known_issues:
+      - na_ontap_snapshot - added documentation to use UTC format for ``expiry_time``.
+      minor_changes:
+      - na_ontap_cluster_config role - support ``broadcast_domain`` and ``service_policy``
+        with REST.
+      - na_ontap_info - add computed serial_hex and naa_id for lun_info.
+      - na_ontap_info - add quota-policy-info.
+      - na_ontap_interface - support ``broadcast_domain`` with REST.
+      - na_ontap_login_messages - support cluster scope when using REST.
+      - na_ontap_lun - support ``qos_adaptive_policy_group`` with REST.
+      - na_ontap_motd - deprecated in favor of ``na_ontap_login_messages``.  Fail
+        when use_rest is set to ``always`` as REST is not supported.
+      - na_ontap_ntp - new option ``key_id`` added.
+      - na_ontap_qtree - Added ``unix_user`` and ``unix_group`` options in REST.
+      - na_ontap_rest_info - add computed serial_hex and naa_id for storage/luns when
+        serial_number is present.
+      - na_ontap_s3_users - ``secret_key`` and ``access_token`` are now returned when
+        creating a user.
+      - na_ontap_service_processor_network - Added REST support.
+      - na_ontap_snapmirror - improve errror messages to be more specific and consistent.
+      - na_ontap_snapmirror - new option ``validate_source_path`` to disable this
+        validation.
+      - na_ontap_snapmirror - validate source endpoint for ZAPI and REST, accounting
+        for vserver local name.
+      - na_ontap_snapmirror - wait for the relationship to come back to idle after
+        a resync.
+      - na_ontap_unix_group - added REST support.
+      - na_ontap_unix_user - Added REST support.
+      - na_ontap_unix_user - Added new option ``primary_gid`` aliased to ``group_id``.
+      - na_ontap_user - accept ``service_processor`` as an alias for ``service-processor``
+        with ZAPI, to be consistent with REST.
+      - na_ontap_volume - now defaults to REST with ``use_rest`` set to ``auto``,
+        like every other module.  ZAPI can be forced with ``use_rest`` set to ``never``.
+      - na_ontap_vserver_create role - support ``broadcast_domain``, ``ipspace``,
+        and ``service_policy`` with REST.
+    fragments:
+    - DEVOPS-3632.yaml
+    - DEVOPS-4157.yaml
+    - DEVOPS-4336.yaml
+    - DEVOPS-4417.yaml
+    - DEVOPS-4790.yaml
+    - DEVOPS-4798.yaml
+    - DEVOPS-4799.yaml
+    - DEVOPS-4863.yaml
+    - DEVOPS-5084.yaml
+    - DEVOPS-5092.yaml
+    - DEVOPS-5152.yaml
+    - DEVOPS-5168.yaml
+    - DEVOPS-5174.yaml
+    - DEVOPS-5179.yaml
+    - DEVOPS-5188.yaml
+    - DEVOPS-5190.yaml
+    - DEVOPS-5215.yaml
+    - DEVOPS-5216.yaml
+    - DEVOPS-5220.yaml
+    - DEVOPS-5228.yaml
+    - DEVOPS-5229.yaml
+    - no-story-1.yaml
+    modules:
+    - description: NetApp ONTAP NTP key
+      name: na_ontap_ntp_key
+      namespace: ''
+    - description: NetApp ONTAP S3 groups
+      name: na_ontap_s3_groups
+      namespace: ''
+    - description: NetApp ONTAP S3 Policies
+      name: na_ontap_s3_policies
+      namespace: ''
+    release_date: '2022-07-12'
+  21.22.0:
+    changes:
+      bugfixes:
+      - na_ontap_cluster_peer - report an error if there is an attempt to use the
+        already peered clusters.
+      - na_ontap_interface - fix error deleting fc interface if it is enabled in REST.
+      - na_ontap_license - fix intermittent KeyError when adding licenses with REST.
+      - na_ontap_lun - Added ``lun_modify`` after ``app_modify`` to fix idempotency
+        issue.
+      - na_ontap_name_service_switch - fix AttributeError 'NoneType' object has no
+        attribute 'get_children' if ``sources`` is '-' in current.
+      - na_ontap_name_service_switch - fix idempotency issue on ``sources`` option.
+      - na_ontap_security_key_manager - fix KeyError on ``node``.
+      - na_ontap_service_processor_network - allow manually configuring network if
+        all of ``ip_address``, ``netmask``, ''gateway_ip_address`` set and ``dhcp``
+        not present in REST.
+      - na_ontap_service_processor_network - fail module when trying to disable ``dhcp``
+        and not settting one of ``ip_address``, ``netmask``, ``gateway_ip_address``
+        different than current.
+      - na_ontap_service_processor_network - fix ``wait_for_completion`` ignored when
+        trying to enable service processor network interface in ZAPI.
+      - na_ontap_service_processor_network - fix idempotency issue on ``dhcp`` option
+        in ZAPI.
+      - na_ontap_service_processor_network - fix setting ``dhcp`` v4 takes more than
+        ``wait_for_completion`` retries.
+      - na_ontap_software_update - improve error handling if image file is already
+        present.
+      - na_ontap_software_update - improve error handling when node is rebooting with
+        REST.
+      - na_ontap_software_update - when using REST with ONTAP 9.9 or later, timeout
+        value is properly set.
+      - na_ontap_user - enforce that all methods are under a single application.
+      - na_ontap_user - is_locked was not properly read with ZAPI, making the module
+        not idempotent.
+      minor_changes:
+      - all modules - do not fail on ZAPI EMS log when vserver does not exist.
+      - na_ontap_job_schedule - new option ``cluster`` added.
+      - na_ontap_ldap - fall back to ZAPI when ``use_rest`` is set to ``auto`` or
+        fail when REST is desired.
+      - na_ontap_ldap_client - Added REST support.
+      - na_ontap_ldap_client - Added ``ldaps_enabled`` option in ZAPI.
+      - na_ontap_license - return list of updated package names.
+      - na_ontap_name_service_switch - added REST support.
+      - na_ontap_nvme_subsystem - report subsystem as absent if vserver cannot be
+        found when attempting a delete.
+      - na_ontap_rest_info -- Will now include a message in return output about ``gather_subset``
+        not supported by your version of ONTAP.
+      - na_ontap_rest_info -- Will now warn you if a ``gather_subset`` is not supported
+        by your version of ONTAP.
+      - na_ontap_security_key_manager - indicate that ``node`` is not used and is
+        deprecated.
+      - na_ontap_software_update - deleting a software package is now supported with
+        ZAPI and REST.
+      - na_ontap_svm - added vserver as a convenient alias for name when using module_defaults.
+      - na_ontap_wait_for_condition - added REST support.
+      - na_ontap_wait_for_condition - added ``snapmirror_relationship`` to wait on
+        ``state`` or ``transfer_state`` (REST only).
+    fragments:
+    - DEVOPS-1926.yaml
+    - DEVOPS-4691.yaml
+    - DEVOPS-4773.yaml
+    - DEVOPS-4776.yaml
+    - DEVOPS-4857.yaml
+    - DEVOPS-4882.yaml
+    - DEVOPS-5241.yaml
+    - DEVOPS-5243.yaml
+    - DEVOPS-5246.yaml
+    - DEVOPS-5263.yaml
+    - DEVOPS-5268.yaml
+    - DEVOPS-5270.yaml
+    - DEVOPS-5271.yaml
+    - DEVOPS-5287.yaml
+    - DEVOPS-5297.yaml
+    - DEVOPS-5299.yaml
+    - DEVOPS-5304.yaml
+    release_date: '2022-08-03'
+  21.23.0:
+    changes:
+      bugfixes:
+      - na_ontap_cifs_acl - use ``type`` if present when fetching existing ACL with
+        ZAPI.
+      - na_ontap_cifs_local_user_set_password - when using ZAPI, do not require cluster
+        admin privileges.
+      - na_ontap_cluster_config Role - incorrect license was shown - updated to GNU
+        General Public License v3.0
+      - na_ontap_flexcache - properly use ``origin_cluster`` in GET but not in POST
+        when using REST.
+      - na_ontap_kerberos_realm - fix cannot modify ``comment`` option in ZAPI.
+      - na_ontap_lun_copy - fix key error on ``source_vserver`` option.
+      - na_ontap_ntp - fixed typeError on ``key_id`` field with ZAPI.
+      - na_ontap_s3_buckets - fix TypeError if ``conditions`` not present in policy
+        statements.
+      - na_ontap_s3_buckets - fix options that cannot be modified if not set in creating
+        s3 buckets.
+      - na_ontap_s3_buckets - updated correct choices in options ``audit_event_selector.access``
+        and ``audit_event_selector.permission``.
+      minor_changes:
+      - all REST modules - new option ``force_ontap_version`` to bypass permission
+        issues with custom vsadmin roles.
+      - na_ontap_cifs_local_user_set_password - Added REST support.
+      - na_ontap_cluster_ha - added REST support.
+      - na_ontap_export_policy_rule - ``rule_index`` is now optional for create and
+        delete.
+      - na_ontap_export_policy_rule - new option ``force_delete_on_first_match`` to
+        support duplicate entries on delete.
+      - na_ontap_interface - improved validations for unsupported options with FC
+        interfaces.
+      - na_ontap_kerberos_realm - added REST support.
+      - na_ontap_kerberos_realm - change ``kdc_port`` option type to int.
+      - na_ontap_lun_copy - added REST support.
+      - na_ontap_lun_map_reporting_nodes - added REST support.
+      - na_ontap_ntp - for ONTAP version 9.6 or below fall back to ZAPI when ``use_rest``
+        is set to ``auto`` or fail when REST is desired.
+      - na_ontap_ntp_key - fail for ONTAP version 9.6 or below when ``use_rest`` is
+        set to ``auto`` or when REST is desired.
+      - na_ontap_rest_info - new option ``ignore_api_errors`` to report error in subset
+        rather than breaking execution.
+      - na_ontap_rest_info - support added for protocols/vscan/on-access-policies.
+      - na_ontap_rest_info - support added for protocols/vscan/on-demand-policies.
+      - na_ontap_rest_info - support added for protocols/vscan/scanner-pools.
+      - na_ontap_security_key_manager - added REST support.
+      - na_ontap_security_key_manager - new REST option ``onboard`` for onboard key
+        manager.
+      - na_ontap_security_key_manager - new REST options ``external`` and ``vserver``
+        for external key manager.
+      - na_ontap_ucadapter - added REST support.
+      - na_ontap_user_role -- added REST support.
+      - na_ontap_volume - attempt to delete volume even when unmounting or offlining
+        failed.
+    fragments:
+    - DEVOPS-4197.yaml
+    - DEVOPS-4347.yaml
+    - DEVOPS-4716.yaml
+    - DEVOPS-4762.yaml
+    - DEVOPS-4763.yaml
+    - DEVOPS-4767.yaml
+    - DEVOPS-4771.yaml
+    - DEVOPS-4774.yaml
+    - DEVOPS-4775.yaml
+    - DEVOPS-4789.yaml
+    - DEVOPS-4800.yaml
+    - DEVOPS-5085.yaml
+    - DEVOPS-5223.yaml
+    - DEVOPS-5251.yaml
+    - DEVOPS-5285.yaml
+    - DEVOPS-5338.yaml
+    - DEVOPS-5367.yaml
+    - DEVOPS-5412.yaml
+    - DEVOPS-5413.yaml
+    - DEVOPS-5427.yaml
+    modules:
+    - description: NetApp ONTAP configuration for EMS event destination
+      name: na_ontap_ems_destination
+      namespace: ''
+    release_date: '2022-09-07'
+  21.24.0:
+    changes:
+      bugfixes:
+      - na_ontap_cifs - fix KeyError on ``unix_symlink`` field when using REST.
+      - na_ontap_cifs_acl - use ``type`` when deleting unix-user or unix-group from
+        ACL in ZAPI.
+      - na_ontap_command - do not run command in check_mode (thanks to darksoul42).
+      - na_ontap_ems_destination - fix idempotency issue when ``type`` value is rest_api.
+      - na_ontap_interface - improve error message when interface type is required
+        with REST.
+      - na_ontap_qtree - fix KeyError on unix_permissions.
+      - na_ontap_rest_cli - do not run command in check_mode (thanks to darksoul42).
+      - na_ontap_s3_groups - if `policies` is None module should no longer fail
+      - na_ontap_user - fix idempotency issue with 9.11 because of new is_ldap_fastbind
+        field.
+      - na_ontap_volume_efficiency - Missing fields in REST get should return None
+        and not crash module.
+      minor_changes:
+      - All REST GET's up to and including 9.11.1 that do not require a UUID/KEY to
+        be past in are now supported
+      - na_ontap_cluster - ``timezone.name`` to modify cluster timezone. REST only.
+      - na_ontap_ems_destination - improve error messages - augment UT coverage (thanks
+        to bielawb).
+      - na_ontap_interface - ``dns_domain_name`` is now supported from ONTAP 9.9 or
+        later in REST.
+      - na_ontap_interface - ``is_dns_update_enabled`` is now supported from ONTAP
+        9.9.1 or later in REST.
+      - na_ontap_interface - attempt to set interface_type to ``ip`` when ``protocols``
+        is set to "none".
+      - na_ontap_net_subnet - added REST support.
+      - na_ontap_quotas - Added REST support.
+      - na_ontap_rest_info - Allowed the support of multiple subsets and warn when
+        using ``**`` in fields.
+      - na_ontap_rest_info - added support for ``network/ip/subnets``.
+      - na_ontap_rest_info - support added for cluster.
+      - na_ontap_rest_info - support added for cluster/counter/tables.
+      - na_ontap_rest_info - support added for cluster/licensing/capacity-pools.
+      - na_ontap_rest_info - support added for cluster/licensing/license-managers.
+      - na_ontap_rest_info - support added for cluster/metrocluster/svms.
+      - na_ontap_rest_info - support added for cluster/sensors.
+      - na_ontap_rest_info - support added for name-services/cache/group-membership/settings.
+      - na_ontap_rest_info - support added for name-services/cache/host/settings.
+      - na_ontap_rest_info - support added for name-services/cache/netgroup/settings.
+      - na_ontap_rest_info - support added for name-services/cache/setting.
+      - na_ontap_rest_info - support added for name-services/cache/unix-group/settings.
+      - na_ontap_rest_info - support added for name-services/ldap-schemas.
+      - na_ontap_rest_info - support added for network/fc/fabrics.
+      - na_ontap_rest_info - support added for network/fc/interfaces.
+      - na_ontap_rest_info - support added for network/fc/interfaces.
+      - na_ontap_rest_info - support added for network/ip/subnets.
+      - na_ontap_rest_info - support added for protocols/cifs/connections.
+      - na_ontap_rest_info - support added for protocols/cifs/netbios.
+      - na_ontap_rest_info - support added for protocols/cifs/session/files.
+      - na_ontap_rest_info - support added for protocols/cifs/shadow-copies.
+      - na_ontap_rest_info - support added for protocols/cifs/shadowcopy-sets.
+      - na_ontap_rest_info - support added for protocols/nfs/connected-client-maps.
+      - na_ontap_rest_info - support added for security.
+      - na_ontap_rest_info - support added for security/multi-admin-verify.
+      - na_ontap_rest_info - support added for security/multi-admin-verify/approval-groups.
+      - na_ontap_rest_info - support added for security/multi-admin-verify/requests.
+      - na_ontap_rest_info - support added for security/multi-admin-verify/rules.
+      - na_ontap_rest_info - support added for storage/file/moves.
+      - na_ontap_rest_info - support added for storage/pools.
+      - na_ontap_restit - support multipart/form-data for read and write.
+      - na_ontap_security_ssh - Updates the SSH server configuration for the specified
+        SVM - REST only.
+      - na_ontap_snmp_traphosts - Added ``host`` option in REST.
+      - na_ontap_svm - Added ``ndmp`` option to services in REST.
+      - na_ontap_vserver_create - ``firewall_policy`` is not set when ``service_policy``
+        is present, as ``service_policy`` is preferred.
+      - na_ontap_vserver_create - ``protocol`` is now optional.  ``role`` is not set
+        when protocol is absent.
+      - na_ontap_vserver_create - added ``interface_type``.  Only a value of ``ip``
+        is currently supported.
+      - na_ontap_vserver_create - added support for vserver management interface when
+        using REST.
+    fragments:
+    - DEVOPS-4788.yaml
+    - DEVOPS-4862.yaml
+    - DEVOPS-5017.yaml
+    - DEVOPS-5195.yaml
+    - DEVOPS-5275.yaml
+    - DEVOPS-5344.yaml
+    - DEVOPS-5354.yaml
+    - DEVOPS-5380.yaml
+    - DEVOPS-5414.yaml
+    - DEVOPS-5426.yaml
+    - DEVOPS-5430.yaml
+    - DEVOPS-5453.yaml
+    - DEVOPS-5457.yaml
+    - DEVOPS-5479.yaml
+    - DEVOPS-5481.yaml
+    - DEVOPS-5484.yaml
+    - DEVOPS-5485.yaml
+    - DEVOPS-5487.yaml
+    - DEVOPS-5503.yaml
+    - DEVOPS-5504.yaml
+    - DEVOPS-5505.yaml
+    - DEVOPS-5506.yaml
+    modules:
+    - description: NetApp ONTAP security ssh
+      name: na_ontap_security_ssh
+      namespace: ''
+    release_date: '2022-10-05'
+  21.24.1:
+    changes:
+      bugfixes:
+      - new meta/execution-environment.yml is failing ansible-builder sanitize step.
+    fragments:
+    - DEVOPS-5540.yaml
+    release_date: '2022-10-06'
   21.3.0:
     changes:
       bugfixes:
@@ -2185,3 +2551,108 @@ releases:
     - DEVOPS-4177.yaml
     - DEVOPS-4191.yaml
     release_date: '2021-08-03'
+  22.0.0:
+    changes:
+      bugfixes:
+      - iso8601 filters - fix documentation generation issue.
+      - na_ontap_firmware_upgrade - when enabled, disruptive_update would always update
+        even when update is not required.
+      - na_ontap_info - Added vserver in key_fields of net_interface_info.
+      - na_ontap_interface - fix error where an ``address`` with an IPV6 ip would
+        try to modify each time playbook was run.
+      - na_ontap_ldap_client - ``servers`` not accepted when using ZAPI and ``ldap_servers``
+        not handling a single server properly.
+      - na_ontap_rest_info - fixed error where module would fail silently when using
+        ``owning_resouce`` and a non-existent vserver.
+      - na_ontap_user_role - fixed Invalid JSON input. Expecting "privileges" to be
+        an array.
+      - na_ontap_volume - ``snapdir_access`` is not supported by REST and will currently
+        inform you now if you try to use it with REST.
+      - na_ontap_volume - fix KeyError on ``aggregate_name`` when trying to unencrypt
+        volume in ZAPI.
+      - na_ontap_volume - fix error when trying to move encrypted volume and ``encrypt``
+        is True in REST.
+      - na_ontap_volume - fix error when trying to unencrypt volume in REST.
+      - na_ontap_volume - when deleting a volume, don't report a warning when unmount
+        is successful (error is None).
+      - tracing - redact headers and authentication secrets by default.
+      minor_changes:
+      - na_ontap_autosupport_invoke - warn when ``message`` alias is used as it will
+        be removed - it conflicts with Ansible internal variable.
+      - na_ontap_debug - report python executable version and path.
+      - na_ontap_export_policy_rule - ``allow_device_creation`` and ``chown_mode``
+        is now supported in ZAPI.
+      - na_ontap_export_policy_rule - ``allow_suid``, ``allow_device_creation`` and
+        ``chown_mode`` is now supported from ONTAP 9.9.1 or later in REST.
+      - na_ontap_ldap_client - new option ``skip_config_validation``.
+      - na_ontap_login_message - warn when ``message`` alias is used as it will be
+        removed - it conflicts with Ansible internal variable.
+      - na_ontap_motd - warn when ``message`` alias is used as it will be removed
+        - it conflicts with Ansible internal variable.
+      - na_ontap_net_routes - ``metric`` option is supported from ONTAP 9.11.0 or
+        later in REST.
+      - na_ontap_nfs - warn when ``nfsv4.1`` alias is used as it will be removed -
+        it does not match Ansible naming convention.
+      - na_ontap_rest_info - support added for protocols/active-directory.
+      - na_ontap_rest_info - support added for protocols/cifs/group-policies.
+      - na_ontap_rest_info - support added for protocols/nfs/connected-client-settings.
+      - na_ontap_rest_info - support added for security/aws-kms.
+      - na_ontap_service_policy - new options ``known_services`` and ``additional_services``.
+      - na_ontap_service_policy - update services for 9.11.1 - make it easier to add
+        new services.
+      - na_ontap_snapmirror - ``schedule`` is handled through ``policy`` for REST.
+      - na_ontap_snapmirror_policy - ``name`` added as an alias for ``policy_name``.
+      - na_ontap_snapmirror_policy - improve error reporting and report errors in
+        check_mode.
+      - na_ontap_snapmirror_policy - new option ``identity_preservation`` added.
+      - na_ontap_volume - ``wait_for_completion`` and ``check_interval`` is now supported
+        for volume move and encryption in REST.
+      - na_ontap_volume - new REST option ``analytics`` added.
+      - na_ontap_volume - new option ``max_wait_time`` added.
+      - tracing - allow to selectively trace headers and authentication.
+    fragments:
+    - DEVOPS-4348.yaml
+    - DEVOPS-4367.yaml
+    - DEVOPS-4644.yaml
+    - DEVOPS-5409.yaml
+    - DEVOPS-5431.yaml
+    - DEVOPS-5531.yaml
+    - DEVOPS-5532.yaml
+    - DEVOPS-5537.yaml
+    - DEVOPS-5548.yaml
+    - DEVOPS-5592.yaml
+    - DEVOPS-5594.yaml
+    - DEVOPS-5595.yaml
+    - DEVOPS-5596.yaml
+    - DEVOPS-5611.yaml
+    - DEVOPS-5626.yaml
+    - DEVOPS-5629.yaml
+    - github-110.yaml
+    modules:
+    - description: NetApp ONTAP module to create, modify or delete bgp peer group.
+      name: na_ontap_bgp_peer_group
+      namespace: ''
+    - description: NetApp ONTAP NTFS file security permissions
+      name: na_ontap_file_security_permissions
+      namespace: ''
+    - description: NetApp ONTAP file security permissions ACL
+      name: na_ontap_file_security_permissions_acl
+      namespace: ''
+    - description: NetApp ONTAP local hosts
+      name: na_ontap_local_hosts
+      namespace: ''
+    - description: NetApp ONTAP name mappings
+      name: na_ontap_name_mappings
+      namespace: ''
+    release_date: '2022-11-02'
+  22.0.1:
+    changes:
+      bugfixes:
+      - na_ontap_interface - fix ``netmask`` not idempotent in REST.
+      - na_ontap_mcc_mediator - Fix error that would prevent mediator deletion,
+      minor_changes:
+      - na_ontap_interface - allow setting ``netmask`` with netmask length in ZAPI.
+    fragments:
+    - DEVOPS-5589.yaml
+    - DEVOPS-5662.yaml
+    release_date: '2022-11-10'

@@ -523,8 +523,6 @@ class NetAppOntapQosPolicyGroup:
         """
         Run module based on playbook
         """
-        if not self.use_rest:
-            netapp_utils.ems_log_event_cserver("na_ontap_qos_policy_group", self.server, self.module)
         current = self.get_policy_group()
         rename, cd_action = None, None
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
@@ -554,7 +552,8 @@ class NetAppOntapQosPolicyGroup:
                 self.delete_policy_group()
             elif modify:
                 self.modify_helper(modify)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

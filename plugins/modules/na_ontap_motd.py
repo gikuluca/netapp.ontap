@@ -11,36 +11,38 @@ __metaclass__ = type
 DOCUMENTATION = '''
 module: na_ontap_motd
 author:
- - Piotr Olczak (@dprts) <polczak@redhat.com>
- - NetApp Ansible Team (@carchi8py) <ng-ansibleteam@netapp.com>
+  - Piotr Olczak (@dprts) <polczak@redhat.com>
+  - NetApp Ansible Team (@carchi8py) <ng-ansibleteam@netapp.com>
 extends_documentation_fragment:
-    - netapp.ontap.netapp.na_ontap
+    - netapp.ontap.netapp.na_ontap_zapi
 short_description: Setup motd
 description:
-    - This module allows you to manipulate motd for a vserver
-    - It also allows to manipulate motd at the cluster level by using the cluster vserver (cserver)
+  - This module allows you to manipulate motd for a vserver
+  - It also allows to manipulate motd at the cluster level by using the cluster vserver (cserver)
 version_added: 2.7.0
 options:
     state:
         description:
-        - If C(state=present) sets MOTD given in I(message) C(state=absent) removes it.
+          - If C(state=present) sets MOTD given in I(message) C(state=absent) removes it.
         choices: ['present', 'absent']
         type: str
         default: present
     motd_message:
         description:
-        - MOTD Text message.
+          - MOTD Text message.
+          - message is deprecated and will be removed to avoid a conflict with an Ansible internal variable.
         type: str
+        default: ''
         aliases:
           - message
     vserver:
         description:
-        - The name of the SVM motd should be set for.
+          - The name of the SVM motd should be set for.
         required: true
         type: str
     show_cluster_motd:
         description:
-        - Set to I(false) if Cluster-level Message of the Day should not be shown
+          - Set to I(false) if Cluster-level Message of the Day should not be shown
         type: bool
         default: True
 
@@ -97,7 +99,7 @@ from ansible_collections.netapp.ontap.plugins.module_utils.netapp_module import 
 class NetAppONTAPMotd:
 
     def __init__(self):
-        argument_spec = netapp_utils.na_ontap_host_argument_spec()
+        argument_spec = netapp_utils.na_ontap_zapi_only_spec()
         argument_spec.update(dict(
             state=dict(required=False, type='str', default='present', choices=['present', 'absent']),
             vserver=dict(required=True, type='str'),
@@ -112,12 +114,15 @@ class NetAppONTAPMotd:
 
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
+        self.na_helper.module_replaces('na_ontap_login_messages', self.module)
 
         msg = 'netapp.ontap.na_ontap_motd is deprecated and only supports ZAPI.  Please use netapp.ontap.na_ontap_login_messages.'
         if self.parameters['use_rest'].lower() == 'never':
             self.module.warn(msg)
         else:
             self.na_helper.fall_back_to_zapi(self.module, msg, self.parameters)
+        if 'message' in self.parameters:
+            self.module.warn('Error: "message" option conflicts with Ansible internal variable - please use "motd_message".')
 
         if not netapp_utils.has_netapp_lib():
             self.module.fail_json(msg=netapp_utils.netapp_lib_is_required())
@@ -181,7 +186,6 @@ class NetAppONTAPMotd:
         """
         Applies action from playbook
         """
-        netapp_utils.ems_log_event("na_ontap_motd", self.server)
         current = self.motd_get()
         if self.parameters['state'] == 'absent':
             # Just make sure it is empty

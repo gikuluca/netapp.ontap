@@ -272,8 +272,6 @@ class NetAppOntapNetPort:
         """
         Run Module based on play book
         """
-        if not self.use_rest:
-            netapp_utils.ems_log_event_cserver("na_ontap_net_port", self.server, self.module)
         # Run the task for all ports in the list of 'ports'
         missing_ports = list()
         modified = dict()
@@ -295,7 +293,8 @@ class NetAppOntapNetPort:
             self.module.fail_json(changed=self.na_helper.changed, modify=modified,
                                   msg='Error: port%s: %s not found on node: %s%s'
                                   % (plural, ', '.join(missing_ports), self.parameters['node'], suffix))
-        self.module.exit_json(changed=self.na_helper.changed, modify=modified)
+        result = netapp_utils.generate_result(self.na_helper.changed, modify=modified)
+        self.module.exit_json(**result)
 
 
 def main():

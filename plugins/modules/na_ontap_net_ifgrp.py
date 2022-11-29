@@ -497,7 +497,6 @@ class NetAppOntapIfGrp:
         # for a LAG, rename is equivalent to adding/removing ports from an existing LAG.
         current, exact_match, modify, rename = None, True, None, None
         if not self.use_rest:
-            netapp_utils.ems_log_event_cserver("na_ontap_net_ifgrp", self.server, self.module)
             current = self.get_if_grp()
         elif self.use_rest:
             current, exact_match = self.get_if_grp_rest(self.parameters.get('ports'), allow_partial_match=True)
@@ -531,7 +530,8 @@ class NetAppOntapIfGrp:
                     self.modify_ports_rest(modify, uuid)
                 else:
                     self.modify_ports(current_ports['ports'])
-        self.module.exit_json(changed=self.na_helper.changed, modify=modify)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

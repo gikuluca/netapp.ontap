@@ -120,6 +120,7 @@ class NetAppOntapActiveDirectory:
         )
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
+        self.na_helper.module_deprecated(self.module)
         if netapp_utils.has_netapp_lib() is False:
             self.module.fail_json(msg=netapp_utils.netapp_lib_is_required())
         else:
@@ -193,19 +194,7 @@ class NetAppOntapActiveDirectory:
             self.module.fail_json(msg='Error modifying vserver Active Directory %s: %s' %
                                       (self.parameters['account_name'], to_native(error)))
 
-    def asup_log_for_cserver(self, event_name):
-        """
-        Fetch admin vserver for the given cluster
-        Create and Autosupport log event with the given module name
-        :param event_name: Name of the event log
-        :return: None
-        """
-        results = netapp_utils.get_cserver(self.server)
-        cserver = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=results)
-        netapp_utils.ems_log_event(event_name, cserver)
-
     def apply(self):
-        self.asup_log_for_cserver("na_ontap_active_directory")
         current = self.get_active_directory()
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
         modify = None
@@ -220,7 +209,8 @@ class NetAppOntapActiveDirectory:
                 self.delete_active_directory()
             elif modify:
                 self.modify_active_directory()
-        self.module.exit_json(changed=self.na_helper.changed, modify=modify)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

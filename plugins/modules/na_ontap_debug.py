@@ -71,17 +71,18 @@ class NetAppONTAPDebug(object):
     def list_versions(self):
         self.log_list.append('Ansible version: %s' % netapp_utils.ansible_version)
         self.log_list.append('ONTAP collection version: %s' % netapp_utils.COLLECTION_VERSION)
+        self.log_list.append('Python version: %s' % sys.version[:3])
+        self.log_list.append('Python executable path: %s' % sys.executable)
 
     def import_lib(self):
         if not netapp_utils.has_netapp_lib():
-            syspath = ','.join(sys.path)
             msgs = [
                 'Error importing netapp-lib or a dependency: %s.' % str(netapp_utils.IMPORT_EXCEPTION),
                 'Install the python netapp-lib module or a missing dependency.',
                 'Additional diagnostic information:',
                 'Python Executable Path: %s.' % sys.executable,
                 'Python Version: %s.' % sys.version,
-                'System Path: %s.' % syspath,
+                'System Path: %s.' % ','.join(sys.path),
             ]
             self.error_list.append('  '.join(msgs))
             return
@@ -213,22 +214,6 @@ class NetAppONTAPDebug(object):
         self.list_interfaces(name)
         self.list_users(vserver_name=name)
 
-    def asup_log_for_cserver(self, event_name):
-        """
-        Fetch admin vserver for the given cluster
-        Create and Autosupport log event with the given module name
-        :param event_name: Name of the event log
-        :return: None
-        """
-        cserver = netapp_utils.get_cserver(self.server)
-        if cserver is None:
-            server = self.server
-            event_name += ':error_no_cserver'
-            self.note_list.append('cserver not found')
-        else:
-            server = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=cserver)
-        netapp_utils.ems_log_event(event_name, server)
-
     def apply(self):
         """
         Apply debug
@@ -247,13 +232,6 @@ class NetAppONTAPDebug(object):
 
         # check rest connection errors
         has_rest = self.check_connection("REST")
-
-        # log asup event with current event_name
-        if has_zapi:
-            try:
-                self.asup_log_for_cserver("na_ontap_debug")
-            except netapp_utils.zapi.NaApiError as error:
-                self.error_list.append('Failed to log EMS message: %s' % str(error))
 
         if has_rest:
             self.list_users(user_name=self.parameters.get('username'))

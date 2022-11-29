@@ -15,7 +15,7 @@ from ansible_collections.netapp.ontap.tests.unit.plugins.module_utils.ansible_mo
     assert_warning_was_raised, call_main, create_module, create_and_apply, expect_and_capture_ansible_exception, patch_ansible, print_warnings
 from ansible_collections.netapp.ontap.tests.unit.framework.mock_rest_and_zapi_requests import \
     get_mock_record, patch_request_and_invoke, print_requests, register_responses
-from ansible_collections.netapp.ontap.tests.unit.framework.zapi_factory import build_zapi_error, build_zapi_response, zapi_responses
+from ansible_collections.netapp.ontap.tests.unit.framework.zapi_factory import build_zapi_error, build_zapi_response, zapi_error_message, zapi_responses
 
 from ansible_collections.netapp.ontap.plugins.modules.na_ontap_volume \
     import NetAppOntapVolume as vol_module, main as my_main  # module under test
@@ -52,14 +52,14 @@ MOCK_VOL = {
 }
 
 
-def volume_info(style, vol_details=None, remove_keys=None):
+def volume_info(style, vol_details=None, remove_keys=None, encrypt='false'):
     if not vol_details:
         vol_details = MOCK_VOL
     info = copy.deepcopy({
         'num-records': 1,
         'attributes-list': {
             'volume-attributes': {
-                'encrypt': 'false',
+                'encrypt': encrypt,
                 'volume-id-attributes': {
                     'aggr-list': vol_details['aggregate'],
                     'containing-aggregate-name': vol_details['aggregate'],
@@ -101,7 +101,8 @@ def volume_info(style, vol_details=None, remove_keys=None):
                         'permissions': vol_details['unix_permissions'],
                         'group-id': vol_details['group_id'],
                         'user-id': vol_details['user_id']
-                    }
+                    },
+                    'style': 'unix',
                 },
                 'volume-vserver-dr-protection-attributes': {
                     'vserver-dr-protection': vol_details['vserver_dr_protection'],
@@ -155,7 +156,7 @@ def job_info(state, error):
         'attributes': {
             'job-info': {
                 'job-state': state,
-                'job-progress': 'dummy',
+                'job-progress': 'progress',
                 'job-completion': error,
             }
         }
@@ -164,7 +165,7 @@ def job_info(state, error):
 
 def results_info(status):
     return {
-        'result-status': 'in_progress',
+        'result-status': status,
         'result-jobid': 'job12345',
     }
 
@@ -200,13 +201,16 @@ def sis_info():
 ZRR = zapi_responses({
     'get_flexgroup': build_zapi_response(volume_info('flexgroup')),
     'get_flexvol': build_zapi_response(volume_info('flexvol')),
+    'get_flexvol_encrypted': build_zapi_response(volume_info('flexvol', encrypt='true')),
     'get_flexvol_no_online_key': build_zapi_response(volume_info('flexvol', remove_keys=['is_online'])),
     'job_failure': build_zapi_response(job_info('failure', 'failure')),
     'job_other': build_zapi_response(job_info('other', 'other_error')),
     'job_running': build_zapi_response(job_info('running', None)),
     'job_success': build_zapi_response(job_info('success', None)),
     'job_time_out': build_zapi_response(job_info('running', 'time_out')),
-    'async_results': build_zapi_response(results_info('1')),
+    'job_no_completion': build_zapi_response(job_info('failure', None)),
+    'async_results': build_zapi_response(results_info('in_progress')),
+    'failed_results': build_zapi_response(results_info('failed')),
     'modify_async_result_success': build_zapi_response(modify_async_results_info('in_progress')),
     'modify_async_result_failure': build_zapi_response(modify_async_results_info('failure', 'error_in_modify')),
     'vol_encryption_conversion_status_running': build_zapi_response(vol_encryption_conversion_status('running')),
@@ -217,7 +221,8 @@ ZRR = zapi_responses({
     'vol_move_status_error': build_zapi_response(vol_move_status('failed')),
     'insufficient_privileges': build_zapi_error(12346, 'Insufficient privileges: user USERID does not have read access to this resource'),
     'get_sis_info': build_zapi_response(sis_info()),
-    'error_15661': build_zapi_error(15661, 'force job not found error')
+    'error_15661': build_zapi_error(15661, 'force job not found error'),
+    'error_tiering_94': build_zapi_error(94, 'volume-comp-aggr-attributes')
 })
 
 
@@ -298,7 +303,6 @@ def test_get_existing_volume():
 def test_create_error_missing_param():
     ''' Test if create throws an error if aggregate_name is not specified'''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
     ])
     module_args = {
@@ -312,7 +316,6 @@ def test_create_error_missing_param():
 def test_successful_create():
     ''' Test successful create '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-create', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
@@ -329,7 +332,6 @@ def test_successful_create():
 def test_successful_create_with_completion(dont_sleep):
     ''' Test successful create '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-create', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),     # wait for online
@@ -351,7 +353,6 @@ def test_successful_create_with_completion(dont_sleep):
 def test_error_timeout_create_with_completion(dont_sleep):
     ''' Test successful create '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-create', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),     # wait for online
@@ -373,7 +374,6 @@ def test_error_timeout_create_with_completion(dont_sleep):
 def test_error_timeout_keyerror_create_with_completion(dont_sleep):
     ''' Test successful create '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-create', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),                     # wait for online
@@ -398,7 +398,6 @@ def test_error_timeout_keyerror_create_with_completion(dont_sleep):
 def test_error_create():
     ''' Test error on create '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-create', ZRR['error']),
     ])
@@ -414,7 +413,6 @@ def test_error_create():
 def test_create_idempotency():
     ''' Test create idempotency '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
     ])
@@ -424,7 +422,6 @@ def test_create_idempotency():
 def test_successful_delete():
     ''' Test delete existing volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-destroy', ZRR['success']),
@@ -438,22 +435,48 @@ def test_successful_delete():
 def test_error_delete():
     ''' Test delete existing volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
+        ('ZAPI', 'volume-destroy', ZRR['error']),
         ('ZAPI', 'volume-destroy', ZRR['error']),
     ])
     module_args = {
         'state': 'absent',
     }
+    error = 'Error deleting volume test_vol:'
+    msg = create_and_apply(vol_module, DEFAULT_ARGS, module_args, fail=True)['msg']
+    assert error in msg
+    error = 'volume delete failed with unmount-and-offline option: %s' % ZAPI_ERROR
+    assert error in msg
+    error = 'volume delete failed without unmount-and-offline option: %s' % ZAPI_ERROR
+    assert error in msg
+
+
+def test_error_delete_async():
+    ''' Test delete existing volume '''
+    register_responses([
+        ('ZAPI', 'volume-get-iter', ZRR['get_flexgroup']),
+        ('ZAPI', 'sis-get-iter', ZRR['no_records']),
+        ('ZAPI', 'volume-unmount', ZRR['error']),
+        ('ZAPI', 'volume-offline-async', ZRR['error']),
+        ('ZAPI', 'volume-destroy-async', ZRR['error']),
+    ])
+    module_args = {
+        'state': 'absent',
+
+    }
     error = 'Error deleting volume test_vol: %s' % ZAPI_ERROR
-    assert create_and_apply(vol_module, DEFAULT_ARGS, module_args, fail=True)['msg'] == error
+    msg = create_and_apply(vol_module, DEFAULT_ARGS, module_args, fail=True)['msg']
+    assert error in msg
+    error = 'Error unmounting volume test_vol: %s' % ZAPI_ERROR
+    assert error in msg
+    error = 'Error changing the state of volume test_vol to offline: %s' % ZAPI_ERROR
+    assert error in msg
 
 
 def test_delete_idempotency():
     ''' Test delete idempotency '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
     ])
     module_args = {
@@ -465,7 +488,6 @@ def test_delete_idempotency():
 def test_successful_modify_size():
     ''' Test successful modify size '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-size', ZRR['success']),
@@ -475,13 +497,12 @@ def test_successful_modify_size():
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<new-size>209715200', 3)
+    assert get_mock_record().is_text_in_zapi_request('<new-size>209715200', 2)
 
 
 def test_modify_idempotency():
     ''' Test modify idempotency '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
     ])
@@ -500,7 +521,6 @@ def test_modify_error():
 def test_mount_volume():
     ''' Test mount volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-mount', ZRR['success']),
@@ -514,7 +534,6 @@ def test_mount_volume():
 def test_error_mount_volume():
     ''' Test mount volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-mount', ZRR['error']),
@@ -529,7 +548,6 @@ def test_error_mount_volume():
 def test_unmount_volume():
     ''' Test unmount volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-unmount', ZRR['success']),
@@ -543,7 +561,6 @@ def test_unmount_volume():
 def test_error_unmount_volume():
     ''' Test unmount volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-unmount', ZRR['error']),
@@ -558,7 +575,6 @@ def test_error_unmount_volume():
 def test_successful_modify_space():
     ''' Test successful modify space '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -570,13 +586,12 @@ def test_successful_modify_space():
     }
     assert create_and_apply(vol_module, args, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<space-guarantee>volume', 3)
+    assert get_mock_record().is_text_in_zapi_request('<space-guarantee>volume', 2)
 
 
 def test_successful_modify_unix_permissions():
     ''' Test successful modify unix_permissions '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -586,13 +601,27 @@ def test_successful_modify_unix_permissions():
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<permissions>---rw-r-xr-x', 3)
+    assert get_mock_record().is_text_in_zapi_request('<permissions>---rw-r-xr-x', 2)
+
+
+def test_successful_modify_volume_security_style():
+    ''' Test successful modify volume_security_style '''
+    register_responses([
+        ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
+        ('ZAPI', 'sis-get-iter', ZRR['no_records']),
+        ('ZAPI', 'volume-modify-iter', ZRR['success']),
+    ])
+    module_args = {
+        'volume_security_style': 'mixed',
+    }
+    assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
+    print_requests()
+    assert get_mock_record().is_text_in_zapi_request('<style>mixed</style>', 2)
 
 
 def test_successful_modify_max_files_and_encrypt():
     ''' Test successful modify unix_permissions '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -604,13 +633,12 @@ def test_successful_modify_max_files_and_encrypt():
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<files-total>3000', 3)
+    assert get_mock_record().is_text_in_zapi_request('<files-total>3000', 2)
 
 
 def test_successful_modify_snapshot_policy():
     ''' Test successful modify snapshot_policy '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -620,13 +648,12 @@ def test_successful_modify_snapshot_policy():
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<snapshot-policy>default-1weekly', 3)
+    assert get_mock_record().is_text_in_zapi_request('<snapshot-policy>default-1weekly', 2)
 
 
 def test_successful_modify_efficiency_policy():
     ''' Test successful modify efficiency_policy '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'sis-enable', ZRR['success']),
@@ -634,17 +661,16 @@ def test_successful_modify_efficiency_policy():
     ])
     module_args = {
         'efficiency_policy': 'test',
-        'compression': True
+        'inline_compression': True
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<policy-name>test', 4)
+    assert get_mock_record().is_text_in_zapi_request('<policy-name>test', 3)
 
 
 def test_successful_modify_efficiency_policy_idempotent():
     ''' Test successful modify efficiency_policy '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['get_sis_info']),
     ])
@@ -658,7 +684,6 @@ def test_successful_modify_efficiency_policy_idempotent():
 def test_successful_modify_efficiency_policy_async():
     ''' Test successful modify efficiency_policy '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexgroup']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'sis-enable-async', ZRR['success']),
@@ -673,7 +698,7 @@ def test_successful_modify_efficiency_policy_async():
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<policy-name>test', 4)
+    assert get_mock_record().is_text_in_zapi_request('<policy-name>test', 3)
 
 
 def test_error_set_efficiency_policy():
@@ -688,7 +713,6 @@ def test_error_set_efficiency_policy():
 def test_error_modify_efficiency_policy():
     ''' Test error modify efficiency_policy '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'sis-enable', ZRR['success']),
@@ -713,7 +737,6 @@ def test_error_set_efficiency_policy_async():
 def test_error_modify_efficiency_policy_async():
     ''' Test error modify efficiency_policy '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexgroup']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'sis-enable-async', ZRR['success']),
@@ -731,7 +754,6 @@ def test_error_modify_efficiency_policy_async():
 def test_successful_modify_percent_snapshot_space():
     ''' Test successful modify percent_snapshot_space '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -741,13 +763,12 @@ def test_successful_modify_percent_snapshot_space():
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<percentage-snapshot-reserve>90', 3)
+    assert get_mock_record().is_text_in_zapi_request('<percentage-snapshot-reserve>90', 2)
 
 
 def test_successful_modify_qos_policy_group():
     ''' Test successful modify qos_policy_group '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -757,13 +778,12 @@ def test_successful_modify_qos_policy_group():
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<policy-group-name>extreme', 3)
+    assert get_mock_record().is_text_in_zapi_request('<policy-group-name>extreme', 2)
 
 
 def test_successful_modify_qos_adaptive_policy_group():
     ''' Test successful modify qos_adaptive_policy_group '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -773,13 +793,12 @@ def test_successful_modify_qos_adaptive_policy_group():
     }
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<adaptive-policy-group-name>extreme', 3)
+    assert get_mock_record().is_text_in_zapi_request('<adaptive-policy-group-name>extreme', 2)
 
 
 def test_successful_move():
     ''' Test successful modify aggregate '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-move-start', ZRR['success']),
@@ -789,15 +808,37 @@ def test_successful_move():
         'aggregate_name': 'different_aggr',
         'cutover_action': 'abort_on_failure',
         'encrypt': True,
-        'wait_for_completion': True,
+        'wait_for_completion': True
     }
+    assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
+
+
+def test_unencrypt_volume():
+    ''' Test successful modify aggregate '''
+    register_responses([
+        ('ZAPI', 'volume-get-iter', ZRR['get_flexvol_encrypted']),
+        ('ZAPI', 'sis-get-iter', ZRR['no_records']),
+        ('ZAPI', 'volume-move-start', ZRR['success']),
+        ('ZAPI', 'volume-move-get-iter', ZRR['vol_move_status_idle']),
+        ('ZAPI', 'volume-get-iter', ZRR['get_flexvol_encrypted']),
+        ('ZAPI', 'sis-get-iter', ZRR['no_records']),
+        ('ZAPI', 'volume-move-start', ZRR['success']),
+        ('ZAPI', 'volume-move-get-iter', ZRR['vol_move_status_idle']),
+    ])
+    # without aggregate
+    module_args = {
+        'encrypt': False,
+        'wait_for_completion': True
+    }
+    assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
+    # with aggregate.
+    module_args['aggregate_name'] = 'test_aggr'
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
 
 
 def test_error_move():
     ''' Test error modify aggregate '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-move-start', ZRR['error']),
@@ -833,7 +874,6 @@ def setup_rename(is_isinfinite=None):
 def test_successful_rename(get_volume):
     ''' Test successful rename volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-rename', ZRR['success']),
     ])
     module_args, current = setup_rename()
@@ -848,7 +888,6 @@ def test_successful_rename(get_volume):
 def test_error_rename(get_volume):
     ''' Test error rename volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-rename', ZRR['error']),
     ])
     module_args, current = setup_rename()
@@ -864,7 +903,6 @@ def test_error_rename(get_volume):
 def test_error_rename_no_from(get_volume):
     ''' Test error rename volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
     ])
     module_args, current = setup_rename()
     get_volume.side_effect = [
@@ -879,7 +917,6 @@ def test_error_rename_no_from(get_volume):
 def test_successful_rename_async(get_volume):
     ''' Test successful rename volume '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-rename-async', ZRR['success']),
     ])
     module_args, current = setup_rename(is_isinfinite=True)
@@ -994,13 +1031,11 @@ def test_compare_chmod_value_invalid_input_4():
 def test_successful_create_flex_group_manually():
     ''' Test successful create flexGroup manually '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['empty']),
         ('ZAPI', 'volume-create-async', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexgroup']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter-async', ZRR['modify_async_result_success']),
-        ('ZAPI', 'job-get', ZRR['job_success']),
         ('ZAPI', 'job-get', ZRR['job_success']),
     ])
     args = copy.deepcopy(DEFAULT_ARGS)
@@ -1017,7 +1052,6 @@ def test_successful_create_flex_group_manually():
 def test_error_create_flex_group_manually():
     ''' Test error create flexGroup manually '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['empty']),
         ('ZAPI', 'volume-create-async', ZRR['error']),
     ])
@@ -1034,7 +1068,6 @@ def test_partial_error_create_flex_group_manually():
     ''' Test error create flexGroup manually '''
     register_responses([
         ('GET', 'cluster', SRR['is_rest']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['empty']),
         ('ZAPI', 'volume-create-async', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexgroup']),
@@ -1060,7 +1093,6 @@ def test_partial_error_create_flex_group_manually():
 def test_successful_create_flex_group_auto_provision():
     ''' Test successful create flexGroup auto provision '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['empty']),
         ('ZAPI', 'volume-create-async', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexgroup']),
@@ -1077,7 +1109,6 @@ def test_successful_create_flex_group_auto_provision():
 def test_successful_delete_flex_group(get_volume):
     ''' Test successful delete flexGroup '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-unmount', ZRR['success']),
         ('ZAPI', 'volume-offline-async', ZRR['job_success']),
         ('ZAPI', 'volume-destroy-async', ZRR['job_success']),
@@ -1123,7 +1154,6 @@ def setup_resize():
 def test_successful_resize_flex_group(get_volume):
     ''' Test successful reszie flexGroup '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-size-async', ZRR['job_success']),
     ])
     module_args, current = setup_resize()
@@ -1135,7 +1165,6 @@ def test_successful_resize_flex_group(get_volume):
 def test_error_resize_flex_group(get_volume):
     ''' Test error reszie flexGroup '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-size-async', ZRR['error']),
     ])
     module_args, current = setup_resize()
@@ -1149,7 +1178,6 @@ def test_error_resize_flex_group(get_volume):
 def test_successful_modify_unix_permissions_flex_group(get_volume, check_job_status):
     ''' Test successful modify unix permissions flexGroup '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-modify-iter-async', ZRR['modify_async_result_success']),
     ])
     module_args = {
@@ -1175,7 +1203,6 @@ def test_successful_modify_unix_permissions_flex_group(get_volume, check_job_sta
 def test_successful_modify_unix_permissions_flex_group_0_time_out(get_volume):
     ''' Test successful modify unix permissions flexGroup '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-modify-iter-async', ZRR['modify_async_result_success']),
     ])
     module_args = {
@@ -1200,7 +1227,6 @@ def test_successful_modify_unix_permissions_flex_group_0_time_out(get_volume):
 def test_successful_modify_unix_permissions_flex_group_0_missing_result(get_volume):
     ''' Test successful modify unix permissions flexGroup '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-modify-iter-async', ZRR['job_running']),       # bad response
     ])
     module_args = {
@@ -1228,7 +1254,6 @@ def test_successful_modify_unix_permissions_flex_group_0_missing_result(get_volu
 def test_error_modify_unix_permissions_flex_group(get_volume, check_job_status):
     ''' Test error modify unix permissions flexGroup '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-modify-iter-async', ZRR['modify_async_result_success']),
     ])
     module_args = {
@@ -1255,7 +1280,6 @@ def test_error_modify_unix_permissions_flex_group(get_volume, check_job_status):
 def test_failure_modify_unix_permissions_flex_group(get_volume):
     ''' Test failure modify unix permissions flexGroup '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-modify-iter-async', ZRR['modify_async_result_failure']),
     ])
     module_args = {
@@ -1298,10 +1322,8 @@ def setup_offline_state():
 def test_successful_offline_state_flex_group(get_volume):
     ''' Test successful offline flexGroup state '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-unmount', ZRR['success']),
         ('ZAPI', 'volume-offline-async', ZRR['async_results']),
-        ('ZAPI', 'job-get', ZRR['job_success']),
         ('ZAPI', 'job-get', ZRR['job_success']),
     ])
     module_args, current = setup_offline_state()
@@ -1313,7 +1335,6 @@ def test_successful_offline_state_flex_group(get_volume):
 def test_error_offline_state_flex_group(get_volume):
     ''' Test error offline flexGroup state '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-unmount', ZRR['success']),
         ('ZAPI', 'volume-offline-async', ZRR['error']),
     ])
@@ -1327,7 +1348,6 @@ def test_error_offline_state_flex_group(get_volume):
 def test_error_unmounting_offline_state_flex_group(get_volume):
     ''' Test error offline flexGroup state '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-unmount', ZRR['error']),
         ('ZAPI', 'volume-offline-async', ZRR['error']),
     ])
@@ -1344,12 +1364,9 @@ def test_error_unmounting_offline_state_flex_group(get_volume):
 def test_successful_online_state_flex_group(get_volume):
     ''' Test successful online flexGroup state '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-online-async', ZRR['async_results']),
         ('ZAPI', 'job-get', ZRR['job_success']),
-        ('ZAPI', 'job-get', ZRR['job_success']),
         ('ZAPI', 'volume-modify-iter-async', ZRR['modify_async_result_success']),
-        ('ZAPI', 'job-get', ZRR['job_success']),
         ('ZAPI', 'job-get', ZRR['job_success']),
         ('ZAPI', 'volume-mount', ZRR['success']),
     ])
@@ -1368,10 +1385,10 @@ def test_successful_online_state_flex_group(get_volume):
     get_volume.return_value = current
     assert create_and_apply(vol_module, DEFAULT_ARGS)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<group-id>', 4)
-    assert get_mock_record().is_text_in_zapi_request('<user-id>', 4)
-    assert get_mock_record().is_text_in_zapi_request('<percentage-snapshot-reserve>', 4)
-    assert get_mock_record().is_text_in_zapi_request('<junction-path>/test</junction-path>', 7)
+    assert get_mock_record().is_text_in_zapi_request('<group-id>', 2)
+    assert get_mock_record().is_text_in_zapi_request('<user-id>', 2)
+    assert get_mock_record().is_text_in_zapi_request('<percentage-snapshot-reserve>', 2)
+    assert get_mock_record().is_text_in_zapi_request('<junction-path>/test</junction-path>', 4)
 
 
 def test_check_job_status_error():
@@ -1393,7 +1410,6 @@ def test_check_job_status_not_found(skip_sleep):
     ''' Test check job status error '''
     register_responses([
         ('ZAPI', 'job-get', ZRR['error_15661']),
-        ('ZAPI', 'job-get', ZRR['error_15661']),
         ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
         ('ZAPI', 'job-get', ZRR['error_15661']),
     ])
@@ -1413,6 +1429,9 @@ def test_check_job_status_failure(skip_sleep):
         ('ZAPI', 'job-get', ZRR['job_running']),
         ('ZAPI', 'job-get', ZRR['job_running']),
         ('ZAPI', 'job-get', ZRR['job_failure']),
+        ('ZAPI', 'job-get', ZRR['job_running']),
+        ('ZAPI', 'job-get', ZRR['job_running']),
+        ('ZAPI', 'job-get', ZRR['job_no_completion']),
     ])
     module_args = {
         'aggr_list': 'aggr_0,aggr_1',
@@ -1420,6 +1439,8 @@ def test_check_job_status_failure(skip_sleep):
         'time_out': 20
     }
     msg = 'failure'
+    assert msg == create_module(vol_module, MINIMUM_ARGS, module_args).check_job_status('123')
+    msg = 'progress'
     assert msg == create_module(vol_module, MINIMUM_ARGS, module_args).check_job_status('123')
 
 
@@ -1441,7 +1462,6 @@ def test_check_job_status_unexpected():
     ''' Test check job status unexpected state '''
     register_responses([
         ('ZAPI', 'job-get', ZRR['job_other']),
-        ('ZAPI', 'job-get', ZRR['job_other']),
     ])
     module_args = {
         'aggr_list': 'aggr_0,aggr_1',
@@ -1455,7 +1475,6 @@ def test_check_job_status_unexpected():
 def test_successful_modify_tiering_policy():
     ''' Test successful modify tiering policy '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -1463,13 +1482,29 @@ def test_successful_modify_tiering_policy():
     module_args = {'tiering_policy': 'auto'}
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<tiering-policy>auto</tiering-policy>', 3)
+    assert get_mock_record().is_text_in_zapi_request('<tiering-policy>auto</tiering-policy>', 2)
+
+
+def test_error_modify_tiering_policy():
+    ''' Test successful modify tiering policy '''
+    register_responses([
+        ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
+        ('ZAPI', 'sis-get-iter', ZRR['no_records']),
+        ('ZAPI', 'volume-modify-iter', ZRR['error']),
+        ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
+        ('ZAPI', 'sis-get-iter', ZRR['no_records']),
+        ('ZAPI', 'volume-modify-iter', ZRR['error_tiering_94']),
+    ])
+    module_args = {'tiering_policy': 'auto'}
+    error = zapi_error_message('Error modifying volume test_vol')
+    assert error in create_and_apply(vol_module, DEFAULT_ARGS, module_args, fail=True)['msg']
+    error = zapi_error_message('Error modifying volume test_vol', 94, 'volume-comp-aggr-attributes', '. Added info: tiering option requires 9.4 or later.')
+    assert error in create_and_apply(vol_module, DEFAULT_ARGS, module_args, fail=True)['msg']
 
 
 def test_successful_modify_vserver_dr_protection():
     ''' Test successful modify vserver_dr_protection '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -1477,13 +1512,12 @@ def test_successful_modify_vserver_dr_protection():
     module_args = {'vserver_dr_protection': 'protected'}
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<vserver-dr-protection>protected</vserver-dr-protection>', 3)
+    assert get_mock_record().is_text_in_zapi_request('<vserver-dr-protection>protected</vserver-dr-protection>', 2)
 
 
 def test_successful_group_id():
     ''' Test successful modify group_id '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -1491,13 +1525,12 @@ def test_successful_group_id():
     module_args = {'group_id': 1001}
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<group-id>1001</group-id>', 3)
+    assert get_mock_record().is_text_in_zapi_request('<group-id>1001</group-id>', 2)
 
 
 def test_successful_modify_user_id():
     ''' Test successful modify user_id '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-modify-iter', ZRR['success']),
@@ -1505,7 +1538,7 @@ def test_successful_modify_user_id():
     module_args = {'user_id': 101}
     assert create_and_apply(vol_module, DEFAULT_ARGS, module_args)['changed']
     print_requests()
-    assert get_mock_record().is_text_in_zapi_request('<user-id>101</user-id>', 3)
+    assert get_mock_record().is_text_in_zapi_request('<user-id>101</user-id>', 2)
 
 
 @patch('ansible_collections.netapp.ontap.plugins.modules.na_ontap_volume.NetAppOntapVolume.get_volume')
@@ -1513,7 +1546,6 @@ def test_successful_modify_snapshot_auto_delete(get_volume):
     ''' Test successful modify unix permissions flexGroup '''
     register_responses([
         # One ZAPI call for each option!
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'snapshot-autodelete-set-option', ZRR['success']),
         ('ZAPI', 'snapshot-autodelete-set-option', ZRR['success']),
         ('ZAPI', 'snapshot-autodelete-set-option', ZRR['success']),
@@ -1555,7 +1587,6 @@ def test_error_modify_snapshot_auto_delete():
 
 def test_successful_volume_rehost():
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-rehost', ZRR['success']),
     ])
@@ -1580,7 +1611,6 @@ def test_error_volume_rehost():
 
 def test_successful_volume_restore():
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
         ('ZAPI', 'snapshot-restore-volume', ZRR['success']),
@@ -1605,7 +1635,6 @@ def test_error_volume_restore():
 def test_error_modify_flexvol_to_flexgroup():
     ''' Test successful modify vserver_dr_protection '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
     ])
@@ -1617,7 +1646,6 @@ def test_error_modify_flexvol_to_flexgroup():
 def test_error_modify_flexgroup_to_flexvol():
     ''' Changing the style from flexgroup to flexvol is not allowed '''
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexgroup']),
         ('ZAPI', 'sis-get-iter', ZRR['no_records']),
     ])
@@ -1629,7 +1657,7 @@ def test_error_modify_flexgroup_to_flexvol():
 def test_error_snaplock_not_supported_with_zapi():
     ''' Test successful modify vserver_dr_protection '''
     module_args = {'snaplock': {'retention': {'default': 'P30TM'}}}
-    msg = 'snaplock option is not supported with ZAPI. It can only be used with REST.'
+    msg = 'Error: snaplock option is not supported with ZAPI.  It can only be used with REST.  use_rest: never.'
     assert msg == create_module(vol_module, DEFAULT_ARGS, module_args, fail=True)['msg']
 
 
@@ -1740,7 +1768,8 @@ def test_start_encryption_conversion(skip_sleep):
         ('ZAPI', 'volume-encryption-conversion-get-iter', ZRR['vol_encryption_conversion_status_idle']),
     ])
     module_args = {
-        'wait_for_completion': True
+        'wait_for_completion': True,
+        'max_wait_time': 120
     }
     my_obj = create_module(vol_module, DEFAULT_ARGS, module_args)
     assert my_obj.start_encryption_conversion(True) is None
@@ -1761,7 +1790,8 @@ def test_error_on_wait_for_start_encryption_conversion(skip_sleep):
         ('ZAPI', 'volume-encryption-conversion-get-iter', ZRR['error']),
     ])
     module_args = {
-        'wait_for_completion': True
+        'wait_for_completion': True,
+        'max_wait_time': 280
     }
     my_obj = create_module(vol_module, DEFAULT_ARGS, module_args)
     error = expect_and_capture_ansible_exception(my_obj.start_encryption_conversion, 'fail', True)['msg']
@@ -1884,7 +1914,6 @@ def test_get_snapshot_auto_delete_attributes():
 
 def test_error_on_get_efficiency_info():
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['no_records']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
         ('ZAPI', 'sis-get-iter', ZRR['error']),
     ])
@@ -1894,7 +1923,6 @@ def test_error_on_get_efficiency_info():
 
 def test_create_volume_from_main():
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['no_records']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-create', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
@@ -1912,14 +1940,13 @@ def test_create_volume_from_main():
         'space_guarantee': 'file',
         'tiering_policy': 'snapshot-only',
         'volume_security_style': 'unix',
-        'vserver_dr_protection': 'unprotected'
+        'vserver_dr_protection': 'unprotected',
     }
     assert call_main(my_main, args, module_args)['changed']
 
 
 def test_error_create_volume_change_in_type():
     register_responses([
-        ('ZAPI', 'ems-autosupport-log', ZRR['no_records']),
         ('ZAPI', 'volume-get-iter', ZRR['no_records']),
         ('ZAPI', 'volume-create', ZRR['success']),
         ('ZAPI', 'volume-get-iter', ZRR['get_flexvol']),
@@ -1932,3 +1959,66 @@ def test_error_create_volume_change_in_type():
     }
     error = 'Error: volume type was not set properly at creation time.  Current: rw, desired: dp.'
     assert call_main(my_main, args, module_args, fail=True)['msg'] == error
+
+
+def test_create_volume_attribute():
+    obj = create_module(vol_module, DEFAULT_ARGS)
+    # str
+    obj.parameters['option_name'] = 'my_option'
+    parent = netapp_utils.zapi.NaElement('results')
+    obj.create_volume_attribute(None, parent, 'zapi_name', 'option_name')
+    print(parent.to_string())
+    assert parent['zapi_name'] == 'my_option'
+    # int - fail, unless converted
+    obj.parameters['option_name'] = 123
+    expect_and_capture_ansible_exception(obj.create_volume_attribute, TypeError, None, parent, 'zapi_name', 'option_name')
+    parent = netapp_utils.zapi.NaElement('results')
+    obj.create_volume_attribute(None, parent, 'zapi_name', 'option_name', int)
+    assert parent['zapi_name'] == '123'
+    # boolmodify_volume_efficiency_config
+    obj.parameters['option_name'] = False
+    parent = netapp_utils.zapi.NaElement('results')
+    obj.create_volume_attribute(None, parent, 'zapi_name', 'option_name', bool)
+    assert parent['zapi_name'] == 'false'
+    # parent->attrs->attr
+    # create child
+    parent = netapp_utils.zapi.NaElement('results')
+    obj.create_volume_attribute('child', parent, 'zapi_name', 'option_name', bool)
+    assert parent['child']['zapi_name'] == 'false'
+    # use existing child in parent
+    obj.create_volume_attribute('child', parent, 'zapi_name2', 'option_name', bool)
+    assert parent['child']['zapi_name2'] == 'false'
+    # pass child
+    parent = netapp_utils.zapi.NaElement('results')
+    child = netapp_utils.zapi.NaElement('child')
+    obj.create_volume_attribute(child, parent, 'zapi_name', 'option_name', bool)
+    assert parent['child']['zapi_name'] == 'false'
+
+
+def test_check_invoke_result():
+    register_responses([
+        # 3rd run
+        ('ZAPI', 'job-get', ZRR['job_success']),
+        # 3th run
+        ('ZAPI', 'job-get', ZRR['job_failure']),
+    ])
+    module_args = {
+        'time_out': 0
+    }
+    obj = create_module(vol_module, DEFAULT_ARGS, module_args)
+    # 1 - operation failed immediately
+    error = 'Operation failed when testing volume.'
+    assert error in expect_and_capture_ansible_exception(obj.check_invoke_result, 'fail', ZRR['failed_results'][0], 'testing')['msg']
+    # 2 - operation in progress - exit immediately as time_out is 0
+    assert obj.check_invoke_result(ZRR['async_results'][0], 'testing') is None
+    module_args = {
+        'time_out': 10
+    }
+    # 3 - operation in progress - job reported success
+    obj = create_module(vol_module, DEFAULT_ARGS, module_args)
+    error = 'Error when testing volume: failure'
+    assert obj.check_invoke_result(ZRR['async_results'][0], 'testing') is None
+    # 4 - operation in progress - job reported a failure
+    obj = create_module(vol_module, DEFAULT_ARGS, module_args)
+    error = 'Error when testing volume: failure'
+    assert error in expect_and_capture_ansible_exception(obj.check_invoke_result, 'fail', ZRR['async_results'][0], 'testing')['msg']

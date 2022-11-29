@@ -6,6 +6,7 @@
 #
 # Copyright (c) 2017, Sumit Kumar <sumit4@netapp.com>
 # Copyright (c) 2017, Michael Price <michael.price@netapp.com>
+# Copyright (c) 2017-2022, NetApp, Inc
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without modification,
@@ -47,7 +48,7 @@ try:
 except ImportError:
     ansible_version = 'unknown'
 
-COLLECTION_VERSION = "21.21.0"
+COLLECTION_VERSION = "22.1.0"
 CLIENT_APP_VERSION = "%s/%s" % ("%s", COLLECTION_VERSION)
 IMPORT_EXCEPTION = None
 
@@ -107,6 +108,10 @@ ERROR_MSG = dict(
 
 LOG = logging.getLogger(__name__)
 LOG_FILE = '/tmp/ontap_apis.log'
+ZAPI_DEPRECATION_MESSAGE = "With version 22.0.0 ONTAPI (ZAPI) has been deprecated. ONTAP last version to support ONTAPI is shipping end of 2022. " \
+                           "ZAPI calls in these modules will continue to work for ONTAP versions that supports ZAPI. " \
+                           "You can update your playbook to use REST by adding use_rest: always to your playbook. "\
+                           "More information can be found at: https://github.com/ansible-collections/netapp.ontap"
 
 try:
     from solidfire.factory import ElementFactory
@@ -127,7 +132,26 @@ def has_sf_sdk():
     return HAS_SF_SDK
 
 
+def na_ontap_zapi_only_spec():
+    # This is used for Zapi only Modules.
+
+    return dict(
+        hostname=dict(required=True, type='str'),
+        username=dict(required=False, type='str', aliases=['user']),
+        password=dict(required=False, type='str', aliases=['pass'], no_log=True),
+        https=dict(required=False, type='bool', default=False),
+        validate_certs=dict(required=False, type='bool', default=True),
+        http_port=dict(required=False, type='int'),
+        ontapi=dict(required=False, type='int'),
+        use_rest=dict(required=False, type='str', default='never'),
+        feature_flags=dict(required=False, type='dict'),
+        cert_filepath=dict(required=False, type='str'),
+        key_filepath=dict(required=False, type='str', no_log=False),
+    )
+
+
 def na_ontap_host_argument_spec():
+    # This is used for Zapi + REST, and REST only Modules.
 
     return dict(
         hostname=dict(required=True, type='str'),
@@ -138,9 +162,10 @@ def na_ontap_host_argument_spec():
         http_port=dict(required=False, type='int'),
         ontapi=dict(required=False, type='int'),
         use_rest=dict(required=False, type='str', default='auto'),
-        feature_flags=dict(required=False, type='dict', default=dict()),
+        feature_flags=dict(required=False, type='dict'),
         cert_filepath=dict(required=False, type='str'),
         key_filepath=dict(required=False, type='str', no_log=False),
+        force_ontap_version=dict(required=False, type='str')
     )
 
 
@@ -166,8 +191,10 @@ def get_feature(module, feature_name):
         otherwise, use our default
     '''
     default_flags = dict(
-        strict_json_check=True,                 # if true, fail if response.content in not empty and is not valid json
-        trace_apis=False,                       # if true, append ZAPI and REST requests/responses to /tmp/ontap_zapi.txt
+        strict_json_check=True,                 # when true, fail if response.content in not empty and is not valid json
+        trace_apis=False,                       # when true, append ZAPI and REST requests/responses to /tmp/ontap_zapi.txt
+        trace_headers=False,                    # when true, headers are not redacted in send requests
+        trace_auth_args=False,                  # when true, auth_args are not redacted in send requests
         check_required_params_for_none=True,
         classic_basic_authorization=False,      # use ZAPI wrapper to send Authorization header
         deprecation_warning=True,
@@ -177,7 +204,7 @@ def get_feature(module, feature_name):
         always_wrap_zapi=True,                  # for better error reporting
         flexcache_delete_return_timeout=5,      # ONTAP bug if too big?
         # for SVM, whch protocols can be allowed
-        svm_allowable_protocols_rest=['cifs', 'fcp', 'iscsi', 'nvme', 'nfs'],
+        svm_allowable_protocols_rest=['cifs', 'fcp', 'iscsi', 'nvme', 'nfs', 'ndmp'],
         svm_allowable_protocols_zapi=['cifs', 'fcp', 'iscsi', 'nvme', 'nfs', 'ndmp', 'http'],
         max_files_change_threshold=1,           # percentage of increase/decrease required to trigger a modify action
         warn_or_fail_on_fabricpool_backend_change='fail',
@@ -206,7 +233,7 @@ def create_sf_connection(module, port=None, host_options=None):
     if extra_options:
         verb = 'are' if len(extra_options) > 1 else 'is'
         msg2 = "%s %s not supported for ElementSW connection." % (', '.join(extra_options), verb)
-    msg = ("%s  %s") % (msg, msg2) if msg and msg2 else msg or msg2
+    msg = "%s  %s" % (msg, msg2) if msg and msg2 else msg or msg2
     if msg:
         module.fail_json(msg=msg)
     hostname = host_options.get('hostname')
@@ -287,6 +314,7 @@ def set_zapi_port_and_transport(server, https, port, validate_certs):
 
 
 def setup_na_ontap_zapi(module, vserver=None, wrap_zapi=False, host_options=None):
+    module.warn(ZAPI_DEPRECATION_MESSAGE)
     if host_options is None:
         host_options = module.params
     hostname = host_options.get('hostname')
@@ -359,46 +387,7 @@ def is_zapi_write_access_error(message):
 def is_zapi_missing_vserver_error(message):
     ''' return True if it is a missing vserver error '''
     # netapp-lib message may contain a tuple or a str!
-    return isinstance(message, str) and message == 'Vserver API missing vserver parameter.'
-
-
-def ems_log_event_cserver(source, server, module):
-    if has_feature(module, 'no_cserver_ems'):
-        return
-    results = get_cserver(server)
-    cserver = setup_na_ontap_zapi(module=module, vserver=results)
-    ems_log_event(source, cserver)
-
-
-def ems_log_event(source, server, name="Ansible", ident="12345", version=COLLECTION_VERSION,
-                  category="Information", event="setup", autosupport="false"):
-    ems_log = zapi.NaElement('ems-autosupport-log')
-    # Host name invoking the API.
-    ems_log.add_new_child("computer-name", name)
-    # ID of event. A user defined event-id, range [0..2^32-2].
-    ems_log.add_new_child("event-id", ident)
-    # Name of the application invoking the API.
-    ems_log.add_new_child("event-source", source)
-    # Version of application invoking the API.
-    ems_log.add_new_child("app-version", version)
-    # Application defined category of the event.
-    ems_log.add_new_child("category", category)
-    # Description of event to log. An application defined message to log.
-    ems_log.add_new_child("event-description", event)
-    ems_log.add_new_child("log-level", "6")
-    ems_log.add_new_child("auto-support", autosupport)
-    try:
-        server.invoke_successfully(ems_log, True)
-    except zapi.NaApiError as exc:
-        # Do not fail if we can't connect to the server.
-        # The module will report a better error when trying to get some data from ONTAP.
-        # Do not fail if we don't have write privileges.
-        # Do not fail if there is no cserver, as on FSx.
-        if not is_zapi_connection_error(exc.message) \
-           and not is_zapi_write_access_error(exc.message) \
-           and not is_zapi_missing_vserver_error(exc.message):
-            # raise on other errors, as it may be a bug in calling the ZAPI
-            raise exc
+    return isinstance(message, str) and message in ('Vserver API missing vserver parameter.', 'Specified vserver not found')
 
 
 def get_cserver_zapi(server):
@@ -464,6 +453,19 @@ def get_cserver(connection, is_rest=False):
             return vservers[0]['vserver']
 
     return None
+
+
+def generate_result(changed, actions=None, modify=None, response=None, extra_responses=None):
+    result = dict(changed=changed)
+    if response is not None:
+        result['response'] = response
+    if modify:
+        result['modify'] = modify
+    if actions:
+        result['actions'] = actions
+    if extra_responses:
+        result.update(extra_responses)
+    return result
 
 
 if HAS_NETAPP_LIB:
@@ -617,11 +619,13 @@ class OntapRestAPI(object):
         self.verify = self.host_options['validate_certs']
         self.timeout = timeout
         port = self.host_options['http_port']
+        self.force_ontap_version = self.host_options.get('force_ontap_version')
         if port is None:
             self.url = 'https://%s/api/' % self.hostname
         else:
             self.url = 'https://%s:%d/api/' % (self.hostname, port)
         self.is_rest_error = None
+        self.fallback_to_zapi_reason = None
         self.ontap_version = dict(
             full='unknown',
             generation=-1,
@@ -635,6 +639,8 @@ class OntapRestAPI(object):
         self.check_required_library()
         if has_feature(module, 'trace_apis'):
             logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG, format='%(asctime)s %(levelname)-8s %(message)s')
+        self.log_headers = has_feature(module, 'trace_headers')
+        self.log_auth_args = has_feature(module, 'trace_auth_args')
 
     def requires_ontap_9_6(self, module_name):
         return self.requires_ontap_version(module_name)
@@ -666,6 +672,8 @@ class OntapRestAPI(object):
         msgs = []
         if self.use_rest == 'never':
             msgs.append('Error: REST is required for this module, found: "use_rest: %s".' % self.use_rest)
+        # The module only supports REST, so make it required
+        self.use_rest = 'always'
         if self.is_rest_error:
             msgs.append('Error using REST for version, error: %s.' % self.is_rest_error)
         if status_code != 200:
@@ -694,7 +702,7 @@ class OntapRestAPI(object):
             headers['X-Dot-SVM-UUID'] = vserver_uuid
         return headers
 
-    def send_request(self, method, api, params, json=None, headers=None):
+    def send_request(self, method, api, params, json=None, headers=None, files=None):
         ''' send http request and process reponse, including error conditions '''
         url = self.url + api
 
@@ -710,11 +718,11 @@ class OntapRestAPI(object):
                 raise KeyError(self.auth_method)
             return kwargs
 
-        status_code, json_dict, error_details = self._send_request(method, url, params, json, headers, get_auth_args())
+        status_code, json_dict, error_details = self._send_request(method, url, params, json, headers, files, get_auth_args())
 
         return status_code, json_dict, error_details
 
-    def _send_request(self, method, url, params, json, headers, auth_args):
+    def _send_request(self, method, url, params, json, headers, files, auth_args):
         status_code = None
         json_dict = None
         json_error = None
@@ -742,12 +750,14 @@ class OntapRestAPI(object):
             return json, json.get('error')
 
         self.log_debug('sending', repr(dict(method=method, url=url, verify=self.verify, params=params,
-                                            timeout=self.timeout, json=json, headers=headers, auth_args=auth_args)))
+                                            timeout=self.timeout, json=json,
+                                            headers=headers if self.log_headers else 'redacted',
+                                            auth_args=auth_args if self.log_auth_args else 'redacted')))
         try:
             response = requests.request(method, url, verify=self.verify, params=params,
-                                        timeout=self.timeout, json=json, headers=headers, **auth_args)
-            self.log_debug(status_code, response.content)
+                                        timeout=self.timeout, json=json, headers=headers, files=files, **auth_args)
             status_code = response.status_code
+            self.log_debug(status_code, response.content)
             # If the response was successful, no Exception will be raised
             response.raise_for_status()
             json_dict, json_error = get_json(response)
@@ -770,10 +780,54 @@ class OntapRestAPI(object):
         if json_error is not None:
             self.log_error(status_code, 'Endpoint error: %d: %s' % (status_code, json_error))
             error_details = json_error
-        if not error_details and not json_dict and method == 'OPTIONS':
-            # OPTIONS provides the list of supported verbs
-            json_dict['Allow'] = response.headers.get('Allow')
+        if not error_details and not json_dict:
+            if json_dict is None:
+                json_dict = {}
+            if method == 'OPTIONS':
+                # OPTIONS provides the list of supported verbs
+                json_dict['Allow'] = response.headers.get('Allow')
+            if response.headers.get('Content-Type', '').startswith("multipart/form-data"):
+                json_dict['text'] = response.text
         return status_code, json_dict, error_details
+
+    def _is_job_done(self, job_json, job_state, job_error, timed_out):
+        """ return (done, message, error)
+            done is True to indicate that the job is complete, or failed, or timed out
+            done is False when the job is still running
+        """
+        # a job looks like this
+        # {
+        #   "uuid": "cca3d070-58c6-11ea-8c0c-005056826c14",
+        #   "description": "POST /api/cluster/metrocluster",
+        #   "state": "failure",
+        #   "message": "There are not enough disks in Pool1.",   **OPTIONAL**
+        #   "code": 2432836,
+        #   "start_time": "2020-02-26T10:35:44-08:00",
+        #   "end_time": "2020-02-26T10:47:38-08:00",
+        #   "_links": {
+        #     "self": {
+        #       "href": "/api/cluster/jobs/cca3d070-58c6-11ea-8c0c-005056826c14"
+        #     }
+        #   }
+        # }
+        done, error = False, None
+        message = job_json.get('message', '') if job_json else None
+        if job_state == 'failure':
+            # if the job has failed, return message as error
+            error = message
+            message = None
+            done = True
+        elif job_state not in ('queued', 'running', None):
+            error = job_error
+            done = True
+        elif timed_out:
+            # Would like to post a message to user (not sure how)
+            self.log_error(0, 'Timeout error: Process still running')
+            error = 'Timeout error: Process still running'
+            if job_error is not None:
+                error += ' - %s' % job_error
+            done = True
+        return done, message, error
 
     def wait_on_job(self, job, timeout=600, increment=60):
         try:
@@ -796,8 +850,9 @@ class OntapRestAPI(object):
         runtime = 0
         retries = 0
         max_retries = 3
-        while True:
-            # Will run every every <increment> seconds for <timeout> seconds
+        done = False
+        while not done:
+            # Will run every <increment> seconds for <timeout> seconds
             job_json, job_error = self.get(url, None)
             job_state = job_json.get('state', None) if job_json else None
             # ignore error if status is provided in the job
@@ -806,45 +861,14 @@ class OntapRestAPI(object):
                 retries += 1
                 if retries > max_retries:
                     error = " - ".join(errors)
-                    self.log_error(0, 'Job error: Reach max retries.')
-                    break
+                    self.log_error(0, 'Job error: Reached max retries.')
+                    done = True
             else:
                 retries = 0
-                # a job looks like this
-                # {
-                #   "uuid": "cca3d070-58c6-11ea-8c0c-005056826c14",
-                #   "description": "POST /api/cluster/metrocluster",
-                #   "state": "failure",
-                #   "message": "There are not enough disks in Pool1.",   **OPTIONAL**
-                #   "code": 2432836,
-                #   "start_time": "2020-02-26T10:35:44-08:00",
-                #   "end_time": "2020-02-26T10:47:38-08:00",
-                #   "_links": {
-                #     "self": {
-                #       "href": "/api/cluster/jobs/cca3d070-58c6-11ea-8c0c-005056826c14"
-                #     }
-                #   }
-                # }
-
-                message = job_json.get('message', '') if job_json else None
-                if job_state == 'failure':
-                    # if the job has failed, return message as error
-                    return None, message
-                if job_state not in ('queued', 'running', None):
-                    if error is None:
-                        error = job_error
-                    break
-                elif runtime >= timeout:
-                    # Would like to post a message to user (not sure how)
-                    if job_state != 'success':
-                        self.log_error(0, 'Timeout error: Process still running')
-                        if error is None:
-                            error = 'Timeout error: Process still running'
-                            if job_error is not None:
-                                error += ' - %s' % job_error
-                    break
-            time.sleep(increment)
-            runtime += increment
+                done, message, error = self._is_job_done(job_json, job_state, job_error, runtime >= timeout)
+            if not done:
+                time.sleep(increment)
+                runtime += increment
         return message, error
 
     def get(self, api, params=None, headers=None):
@@ -852,14 +876,14 @@ class OntapRestAPI(object):
         dummy, message, error = self.send_request(method, api, params, json=None, headers=headers)
         return message, error
 
-    def post(self, api, body, params=None, headers=None):
+    def post(self, api, body, params=None, headers=None, files=None):
         method = 'POST'
-        dummy, message, error = self.send_request(method, api, params, json=body, headers=headers)
+        dummy, message, error = self.send_request(method, api, params, json=body, headers=headers, files=files)
         return message, error
 
-    def patch(self, api, body, params=None, headers=None):
+    def patch(self, api, body, params=None, headers=None, files=None):
         method = 'PATCH'
-        dummy, message, error = self.send_request(method, api, params, json=body, headers=headers)
+        dummy, message, error = self.send_request(method, api, params, json=body, headers=headers, files=files)
         return message, error
 
     def delete(self, api, body=None, params=None, headers=None):
@@ -904,6 +928,39 @@ class OntapRestAPI(object):
             message = message['records'][0]
         return status_code, message, error
 
+    def get_ontap_version_from_params(self):
+        """ Provide a way to override the current version
+            This is required when running a custom vsadmin role as ONTAP does not currently allow access to /api/cluster.
+            This may also be interesting for testing :)
+            Report a warning if API call failed to report version.
+            Report a warning if current version could be fetched and is different.
+        """
+        try:
+            version = [int(x) for x in self.force_ontap_version.split('.')]
+            if len(version) == 2:
+                version.append(0)
+            gen, major, minor = version
+        except (TypeError, ValueError) as exc:
+            self.module.fail_json(
+                msg='Error: unexpected format in force_ontap_version, expecting G.M.m or G.M, as in 9.10.1, got: %s, error: %s'
+                    % (self.force_ontap_version, exc))
+
+        warning = ''
+        read_version = self.get_ontap_version()
+        if read_version == (-1, -1, -1):
+            warning = ', unable to read current version:'
+        elif read_version != (gen, major, minor):
+            warning = ' but current version is %s' % self.ontap_version['full']
+        if warning:
+            warning = 'Forcing ONTAP version to %s%s' % (self.force_ontap_version, warning)
+            self.set_version({'version': {
+                'generation': gen,
+                'major': major,
+                'minor': minor,
+                'full': 'set by user to %s' % self.force_ontap_version,
+            }})
+        return warning
+
     def get_ontap_version_using_rest(self):
         # using GET rather than HEAD because the error messages are different,
         # and we need the version as some REST options are not available in earlier versions
@@ -918,32 +975,62 @@ class OntapRestAPI(object):
         except AttributeError:
             pass
         self.set_version(message)
-        self.is_rest_error = str(error) if error else None
         if error:
             self.log_error(status_code, str(error))
+        if self.force_ontap_version:
+            warning = self.get_ontap_version_from_params()
+            if error:
+                warning += ' error: %s, status_code: %s' % (error, status_code)
+            if warning:
+                self.module.warn(warning)
+                msg = 'Forcing ONTAP version to %s' % self.force_ontap_version
+                if error:
+                    self.log_error('INFO', msg)
+                else:
+                    self.log_debug('INFO', msg)
+            error = None
+            status_code = 200
+        self.is_rest_error = str(error) if error else None
         return status_code
+
+    def convert_parameter_keys_to_dot_notation(self, parameters):
+        """ Get all variable set in a list and add them to a dict so that partially_supported_rest_properties works correctly """
+        if isinstance(parameters, dict):
+            temp = {}
+            for parameter in parameters:
+                if isinstance(parameters[parameter], list):
+                    if parameter not in temp:
+                        temp[parameter] = {}
+                    for adict in parameters[parameter]:
+                        if isinstance(adict, dict):
+                            for key in adict:
+                                temp[parameter + '.' + key] = 0
+            parameters.update(temp)
+        return parameters
 
     def _is_rest(self, used_unsupported_rest_properties=None, partially_supported_rest_properties=None, parameters=None):
         if self.use_rest not in ['always', 'auto', 'never']:
             error = "use_rest must be one of: never, always, auto. Got: '%s'" % self.use_rest
             return False, error
         if self.use_rest == "always" and used_unsupported_rest_properties:
-            error = "REST API currently does not support '%s'" % \
-                    ', '.join(used_unsupported_rest_properties)
+            error = "REST API currently does not support '%s'" % ', '.join(used_unsupported_rest_properties)
             return True, error
         if self.use_rest == 'never':
             # force ZAPI if requested
             return False, None
-        status_code = self.get_ontap_version_using_rest()
+        # don't send a new request if we already know the version
+        status_code = self.get_ontap_version_using_rest() if self.get_ontap_version() == (-1, -1, -1) else 200
         if self.use_rest == "always" and partially_supported_rest_properties:
+            # If a variable is on a list we need to move it to a dict for this check to work correctly.
+            temp_parameters = parameters.copy()
+            temp_parameters = self.convert_parameter_keys_to_dot_notation(temp_parameters)
             error = '\n'.join(
-                "Minimum version of ONTAP for %s is %s."
-                % (property[0], str(property[1]))
+                "Minimum version of ONTAP for %s is %s." % (property[0], str(property[1]))
                 for property in partially_supported_rest_properties
-                if self.get_ontap_version()[0:3] < property[1] and property[0] in parameters
+                if self.get_ontap_version()[:3] < property[1] and property[0] in temp_parameters
             )
             if error != '':
-                return True, error
+                return True, 'Error: %s  Current version: %s.' % (error, self.get_ontap_version())
         if self.use_rest == 'always':
             # ignore error, it will show up later when calling another REST API
             return True, None
@@ -951,21 +1038,25 @@ class OntapRestAPI(object):
         if used_unsupported_rest_properties:
             # force ZAPI if some parameter requires it
             if self.get_ontap_version()[:2] > (9, 5):
-                self.module.warn('Falling back to ZAPI because of unsupported option(s) or option value(s) in REST: %s' % used_unsupported_rest_properties)
+                self.fallback_to_zapi_reason =\
+                    'because of unsupported option(s) or option value(s) in REST: %s' % used_unsupported_rest_properties
+                self.module.warn('Falling back to ZAPI %s' % self.fallback_to_zapi_reason)
             return False, None
         if partially_supported_rest_properties:
             # if ontap version is lower than partially_supported_rest_properties version, force ZAPI, only if the paramater is used
+            # If a variable is on a list we need to move it to a dict for this check to work correctly.
+            temp_parameters = parameters.copy()
+            temp_parameters = self.convert_parameter_keys_to_dot_notation(temp_parameters)
             for property in partially_supported_rest_properties:
-                if self.get_ontap_version()[0:3] < property[1] and property[0] in parameters:
-                    self.module.warn(
-                        'Falling back to ZAPI because of unsupported option(s) or option value(s) "%s" in REST require %s' % (property[0], str(property[1])))
+                if self.get_ontap_version()[:3] < property[1] and property[0] in temp_parameters:
+                    self.fallback_to_zapi_reason =\
+                        'because of unsupported option(s) or option value(s) "%s" in REST require %s' % (property[0], str(property[1]))
+                    self.module.warn('Falling back to ZAPI %s' % self.fallback_to_zapi_reason)
                     return False, None
         if self.get_ontap_version()[:2] in ((9, 4), (9, 5)):
             # we can't trust REST support on 9.5, and not at all on 9.4
             return False, None
-        if status_code == 200:
-            return True, None
-        return False, None
+        return (True, None) if status_code == 200 else (False, None)
 
     def is_rest_supported_properties(self, parameters, unsupported_rest_properties=None, partially_supported_rest_properties=None, report_error=False):
         used_unsupported_rest_properties = None

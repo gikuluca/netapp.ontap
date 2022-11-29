@@ -413,8 +413,6 @@ class NetAppOntapFpolicyEvent():
     def apply(self):
         if self.use_rest:
             self.vserver_uuid = self.get_vserver_uuid()
-        else:
-            netapp_utils.ems_log_event("na_ontap_fpolicy_event", self.server)
 
         current, modify = self.get_fpolicy_event(), None
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
@@ -430,8 +428,8 @@ class NetAppOntapFpolicyEvent():
                     self.delete_fpolicy_event()
                 elif modify:
                     self.modify_fpolicy_event(modify)
-
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

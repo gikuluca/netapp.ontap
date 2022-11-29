@@ -80,6 +80,7 @@ options:
     description:
       - Specify the name of the current schedule, which is used to update the SnapMirror relationship.
       - Optional for create, modifiable.
+      - With REST, use C(policy) to define a schedule.   The C(schedule) option is not supported.
     type: str
   policy:
     description:
@@ -591,7 +592,7 @@ class NetAppONTAPSnapmirror(object):
         if self.parameters.get('connection_type') in ['elementsw_ontap', 'ontap_elementsw'] and HAS_SF_SDK is False:
             self.module.fail_json(msg="Unable to import the SolidFire Python SDK")
 
-        self.src_reat_api = None
+        self.src_rest_api = None
         self.src_use_rest = None
         self.set_source_peer()
         self.rest_api, self.use_rest = self.setup_rest()
@@ -633,6 +634,8 @@ class NetAppONTAPSnapmirror(object):
         if error is not None:
             if 'relationship_type' in error:
                 error = error.replace('relationship_type', 'relationship_type: %s' % rtype)
+            if 'schedule' in error:
+                error += ' - With REST use the policy option to define a schedule.'
             self.module.fail_json(msg=error)
 
         if not use_rest and any(x in self.parameters for x in ontap_97_options):
@@ -758,9 +761,7 @@ class NetAppONTAPSnapmirror(object):
             self.module.fail_json(msg='Error fetching source volume details %s: %s'
                                   % (self.parameters['source_volume'], to_native(error)),
                                   exception=traceback.format_exc())
-        if result.get_child_by_name('num-records') and int(result.get_child_content('num-records')) > 0:
-            return True
-        return False
+        return bool(result.get_child_by_name('num-records') and int(result.get_child_content('num-records')) > 0)
 
     def get_svm_from_destination_vserver_or_path(self):
         svm_name = self.parameters.get('destination_vserver')
@@ -1301,25 +1302,6 @@ class NetAppONTAPSnapmirror(object):
                 msg.append('Last transfer error: %s' % current['last_transfer_error'])
             self.module.warn('  '.join(msg))
 
-    def asup_log_for_cserver(self, event_name):
-        """
-        Fetch admin vserver for the given cluster
-        Create and Autosupport log event with the given module name
-        :param event_name: Name of the event log
-        :return: None
-        """
-        results = netapp_utils.get_cserver(self.server)
-        if results is None:
-            # We may be running on a vserser
-            try:
-                netapp_utils.ems_log_event(event_name, self.server)
-            except netapp_utils.zapi.NaApiError:
-                # Don't fail if we cannot log usage
-                pass
-        else:
-            cserver = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=results)
-            netapp_utils.ems_log_event(event_name, cserver)
-
     def check_if_remote_volume_exists_rest(self):
         """
         Check the remote volume exists using REST
@@ -1690,8 +1672,6 @@ class NetAppONTAPSnapmirror(object):
         """
         Apply action to SnapMirror
         """
-        if not self.use_rest:
-            self.asup_log_for_cserver("na_ontap_snapmirror")
         # source is ElementSW
         if self.parameters['state'] == 'present' and self.parameters.get('connection_type') == 'elementsw_ontap':
             self.check_elementsw_parameters()

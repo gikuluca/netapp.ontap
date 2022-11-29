@@ -384,15 +384,14 @@ class NetAppONTAPClusterPeer:
         Apply action to cluster peer
         :return: None
         """
-        if not self.use_rest:
-            netapp_utils.ems_log_event_cserver("na_ontap_cluster_peer", self.server, self.module)
         source = self.cluster_peer_get('source')
         destination = self.cluster_peer_get('destination')
         source_action = self.na_helper.get_cd_action(source, self.parameters)
         destination_action = self.na_helper.get_cd_action(destination, self.parameters)
         self.na_helper.changed = False
         # create only if expected cluster peer relation is not present on both source and destination clusters
-        if source_action == 'create' and destination_action == 'create':
+        # will error out with appropriate message if peer relationship already exists on either cluster
+        if source_action == 'create' or destination_action == 'create':
             if not self.module.check_mode:
                 self.cluster_peer_create('source')
                 self.cluster_peer_create('destination')
@@ -410,7 +409,9 @@ class NetAppONTAPClusterPeer:
                     self.cluster_peer_delete('destination', uuid)
                 self.na_helper.changed = True
 
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, extra_responses={'source_action': source_action,
+                                                                                       'destination_action': destination_action})
+        self.module.exit_json(**result)
 
 
 def main():

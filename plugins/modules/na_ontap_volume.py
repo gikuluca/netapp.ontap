@@ -22,40 +22,40 @@ version_added: 2.6.0
 author: NetApp Ansible Team (@carchi8py) <ng-ansibleteam@netapp.com>
 
 description:
-- Create or destroy or modify volumes on NetApp ONTAP.
+  - Create or destroy or modify volumes on NetApp ONTAP.
 
 options:
 
   state:
     description:
-    - Whether the specified volume should exist or not.
+      - Whether the specified volume should exist or not.
     choices: ['present', 'absent']
     type: str
     default: 'present'
 
   name:
     description:
-    - The name of the volume to manage.
+      - The name of the volume to manage.
     type: str
     required: true
 
   vserver:
     description:
-    - Name of the vserver to use.
+      - Name of the vserver to use.
     type: str
     required: true
 
   from_name:
     description:
-    - Name of the existing volume to be renamed to name.
+      - Name of the existing volume to be renamed to name.
     type: str
     version_added: 2.7.0
 
   is_infinite:
     type: bool
     description:
-      Set True if the volume is an Infinite Volume.
-      Deleting an infinite volume is asynchronous.
+      - Set True if the volume is an Infinite Volume.
+      - Deleting an infinite volume is asynchronous.
     default: false
 
   is_online:
@@ -115,7 +115,7 @@ options:
       nfs_access:
         description:
           - The list of NFS access controls.  You must provide I(host) or I(access) to enable NFS access.
-          - Mutually exclusive with export_policy option in nas_application_template.
+          - Mutually exclusive with export_policy option.
         type: list
         elements: dict
         suboptions:
@@ -166,39 +166,39 @@ options:
 
   size:
     description:
-    - The size of the volume in (size_unit). Required when C(state=present).
+      - The size of the volume in (size_unit). Required when C(state=present).
     type: int
 
   size_unit:
     description:
-    - The unit used to interpret the size parameter.
+      - The unit used to interpret the size parameter.
     choices: ['bytes', 'b', 'kb', 'mb', 'gb', 'tb', 'pb', 'eb', 'zb', 'yb']
     type: str
     default: 'gb'
 
   size_change_threshold:
     description:
-    - Percentage in size change to trigger a resize.
-    - When this parameter is greater than 0, a difference in size between what is expected and what is configured is ignored if it is below the threshold.
-    - For instance, the nas application allocates a larger size than specified to account for overhead.
-    - Set this to 0 for an exact match.
+      - Percentage in size change to trigger a resize.
+      - When this parameter is greater than 0, a difference in size between what is expected and what is configured is ignored if it is below the threshold.
+      - For instance, the nas application allocates a larger size than specified to account for overhead.
+      - Set this to 0 for an exact match.
     type: int
     default: 10
     version_added: 20.12.0
 
   sizing_method:
     description:
-    - Represents the method to modify the size of a FlexGroup.
-    - use_existing_resources - Increases or decreases the size of the FlexGroup by increasing or decreasing the size of the current FlexGroup resources.
-    - add_new_resources - Increases the size of the FlexGroup by adding new resources. This is limited to two new resources per available aggregate.
-    - This is only supported if REST is enabled (ONTAP 9.6 or later) and only for FlexGroups.  ONTAP defaults to use_existing_resources.
+      - Represents the method to modify the size of a FlexGroup.
+      - use_existing_resources - Increases or decreases the size of the FlexGroup by increasing or decreasing the size of the current FlexGroup resources.
+      - add_new_resources - Increases the size of the FlexGroup by adding new resources. This is limited to two new resources per available aggregate.
+      - This is only supported if REST is enabled (ONTAP 9.6 or later) and only for FlexGroups.  ONTAP defaults to use_existing_resources.
     type: str
     choices: ['add_new_resources', 'use_existing_resources']
     version_added: 20.12.0
 
   type:
     description:
-    - The volume type, either read-write (RW) or data-protection (DP).
+      - The volume type, either read-write (RW) or data-protection (DP).
     type: str
 
   export_policy:
@@ -210,349 +210,360 @@ options:
 
   junction_path:
     description:
-    - Junction path of the volume.
-    - To unmount, use junction path C('').
+      - Junction path of the volume.
+      - To unmount, use junction path C('').
     type: str
 
   space_guarantee:
     description:
-    - Space guarantee style for the volume.
+      - Space guarantee style for the volume.
     choices: ['none', 'file', 'volume']
     type: str
 
   percent_snapshot_space:
     description:
-    - Amount of space reserved for snapshot copies of the volume.
+      - Amount of space reserved for snapshot copies of the volume.
     type: int
 
   volume_security_style:
     description:
-    - The security style associated with this volume.
+      - The security style associated with this volume.
     choices: ['mixed', 'ntfs', 'unified', 'unix']
     type: str
 
   encrypt:
     type: bool
     description:
-    - Whether or not to enable Volume Encryption.
-    - If not present, ONTAP defaults to false at volume creation.
-    - Changing encrypt value after creation requires ONTAP 9.3 or later.
+      - Whether or not to enable Volume Encryption.
+      - If not present, ONTAP defaults to false at volume creation.
+      - Changing encrypt value after creation requires ONTAP 9.3 or later.
     version_added: 2.7.0
 
   efficiency_policy:
     description:
-    - Allows a storage efficiency policy to be set on volume creation.
+      - Allows a storage efficiency policy to be set on volume creation.
     type: str
     version_added: 2.7.0
 
   unix_permissions:
     description:
-    - Unix permission bits in octal or symbolic format.
-    - For example, 0 is equivalent to ------------, 777 is equivalent to ---rwxrwxrwx,both formats are accepted.
-    - The valid octal value ranges between 0 and 777 inclusive.
+      - Unix permission bits in octal or symbolic format.
+      - For example, 0 is equivalent to ------------, 777 is equivalent to ---rwxrwxrwx,both formats are accepted.
+      - The valid octal value ranges between 0 and 777 inclusive.
     type: str
     version_added: 2.8.0
 
   group_id:
     description:
-    - The UNIX group ID for the volume. The default value is 0 ('root').
+      - The UNIX group ID for the volume. The default value is 0 ('root').
     type: int
     version_added: '20.1.0'
 
   user_id:
     description:
-    - The UNIX user ID for the volume. The default value is 0 ('root').
+      - The UNIX user ID for the volume. The default value is 0 ('root').
     type: int
     version_added: '20.1.0'
 
   snapshot_policy:
     description:
-    - The name of the snapshot policy.
-    - The default policy name is 'default'.
-    - If present, this will set the protection_type when using C(nas_application_template).
+      - The name of the snapshot policy.
+      - The default policy name is 'default'.
+      - If present, this will set the protection_type when using C(nas_application_template).
     type: str
     version_added: 2.8.0
 
   aggr_list:
     description:
-    -  an array of names of aggregates to be used for FlexGroup constituents.
+      - an array of names of aggregates to be used for FlexGroup constituents.
     type: list
     elements: str
     version_added: 2.8.0
 
   aggr_list_multiplier:
     description:
-    -  The number of times to iterate over the aggregates listed with the aggr_list parameter when creating a FlexGroup.
+      - The number of times to iterate over the aggregates listed with the aggr_list parameter when creating a FlexGroup.
     type: int
     version_added: 2.8.0
 
   auto_provision_as:
     description:
-    - Automatically provision a FlexGroup volume.
+      - Automatically provision a FlexGroup volume.
     version_added: 2.8.0
     choices: ['flexgroup']
     type: str
 
   snapdir_access:
     description:
-    - This is an advanced option, the default is False.
-    - Enable the visible '.snapshot' directory that is normally present at system internal mount points.
-    - This value also turns on access to all other '.snapshot' directories in the volume.
+      - This is an advanced option, the default is False.
+      - Enable the visible '.snapshot' directory that is normally present at system internal mount points.
+      - This value also turns on access to all other '.snapshot' directories in the volume.
     type: bool
     version_added: 2.8.0
 
   atime_update:
     description:
-    - This is an advanced option, the default is True.
-    - If false, prevent the update of inode access times when a file is read.
-    - This value is useful for volumes with extremely high read traffic,
-      since it prevents writes to the inode file for the volume from contending with reads from other files.
-    - This field should be used carefully.
-    - That is, use this field when you know in advance that the correct access time for inodes will not be needed for files on that volume.
+      - This is an advanced option, the default is True.
+      - If false, prevent the update of inode access times when a file is read.
+      - This value is useful for volumes with extremely high read traffic,
+        since it prevents writes to the inode file for the volume from contending with reads from other files.
+      - This field should be used carefully.
+      - That is, use this field when you know in advance that the correct access time for inodes will not be needed for files on that volume.
     type: bool
     version_added: 2.8.0
 
   wait_for_completion:
     description:
-    - Set this parameter to 'true' for synchronous execution during create (wait until volume status is online)
-    - Set this parameter to 'false' for asynchronous execution
-    - For asynchronous, execution exits as soon as the request is sent, without checking volume status
+      - Set this parameter to 'true' for synchronous execution during create (wait until volume status is online)
+      - Set this parameter to 'false' for asynchronous execution
+      - For asynchronous, execution exits as soon as the request is sent, without checking volume status
     type: bool
     default: false
     version_added: 2.8.0
 
   time_out:
     description:
-    - With ZAPI - time to wait for Flexgroup creation, modification, or deletion in seconds.
-    - With REST - time to wait for any volume creation, modification, or deletion in seconds.
-    - Error out if task is not completed in defined time.
-    - With ZAPI - if 0, the request is asynchronous.
-    - default is set to 3 minutes.
+      - With ZAPI - time to wait for Flexgroup creation, modification, or deletion in seconds.
+      - With REST - time to wait for any volume creation, modification, or deletion in seconds.
+      - Error out if task is not completed in defined time.
+      - With ZAPI - if 0, the request is asynchronous.
+      - Default is set to 3 minutes.
+      - Use C(max_wait_time) and C(wait_for_completion) for volume move and encryption operations.
     default: 180
     type: int
     version_added: 2.8.0
 
+  max_wait_time:
+    description:
+      - Volume move and encryption operations might take longer time to complete.
+      - With C(wait_for_completion) set, module will wait for time set in this option for volume move and encryption to complete.
+      - If time exipres, module exit and the operation may still running.
+      - Default is set to 10 minutes.
+    default: 600
+    type: int
+    version_added: 22.0.0
+
   language:
     description:
-    - Language to use for Volume
-    - Default uses SVM language
-    - Possible values   Language
-    - c                 POSIX
-    - ar                Arabic
-    - cs                Czech
-    - da                Danish
-    - de                German
-    - en                English
-    - en_us             English (US)
-    - es                Spanish
-    - fi                Finnish
-    - fr                French
-    - he                Hebrew
-    - hr                Croatian
-    - hu                Hungarian
-    - it                Italian
-    - ja                Japanese euc-j
-    - ja_v1             Japanese euc-j
-    - ja_jp.pck         Japanese PCK (sjis)
-    - ja_jp.932         Japanese cp932
-    - ja_jp.pck_v2      Japanese PCK (sjis)
-    - ko                Korean
-    - no                Norwegian
-    - nl                Dutch
-    - pl                Polish
-    - pt                Portuguese
-    - ro                Romanian
-    - ru                Russian
-    - sk                Slovak
-    - sl                Slovenian
-    - sv                Swedish
-    - tr                Turkish
-    - zh                Simplified Chinese
-    - zh.gbk            Simplified Chinese (GBK)
-    - zh_tw             Traditional Chinese euc-tw
-    - zh_tw.big5        Traditional Chinese Big 5
-    - To use UTF-8 as the NFS character set, append '.UTF-8' to the language code
+      - Language to use for Volume
+      - Default uses SVM language
+      - Possible values   Language
+      - c                 POSIX
+      - ar                Arabic
+      - cs                Czech
+      - da                Danish
+      - de                German
+      - en                English
+      - en_us             English (US)
+      - es                Spanish
+      - fi                Finnish
+      - fr                French
+      - he                Hebrew
+      - hr                Croatian
+      - hu                Hungarian
+      - it                Italian
+      - ja                Japanese euc-j
+      - ja_v1             Japanese euc-j
+      - ja_jp.pck         Japanese PCK (sjis)
+      - ja_jp.932         Japanese cp932
+      - ja_jp.pck_v2      Japanese PCK (sjis)
+      - ko                Korean
+      - no                Norwegian
+      - nl                Dutch
+      - pl                Polish
+      - pt                Portuguese
+      - ro                Romanian
+      - ru                Russian
+      - sk                Slovak
+      - sl                Slovenian
+      - sv                Swedish
+      - tr                Turkish
+      - zh                Simplified Chinese
+      - zh.gbk            Simplified Chinese (GBK)
+      - zh_tw             Traditional Chinese euc-tw
+      - zh_tw.big5        Traditional Chinese Big 5
+      - To use UTF-8 as the NFS character set, append '.UTF-8' to the language code
     type: str
     version_added: 2.8.0
 
   qos_policy_group:
     description:
-    - Specifies a QoS policy group to be set on volume.
+      - Specifies a QoS policy group to be set on volume.
     type: str
     version_added: 2.9.0
 
   qos_adaptive_policy_group:
     description:
-    - Specifies a QoS adaptive policy group to be set on volume.
+      - Specifies a QoS adaptive policy group to be set on volume.
     type: str
     version_added: 2.9.0
 
   tiering_policy:
     description:
-    - The tiering policy that is to be associated with the volume.
-    - This policy decides whether the blocks of a volume will be tiered to the capacity tier.
-    - snapshot-only policy allows tiering of only the volume snapshot copies not associated with the active file system.
-    - auto policy allows tiering of both snapshot and active file system user data to the capacity tier.
-    - backup policy on DP volumes allows all transferred user data blocks to start in the capacity tier.
-    - all is the REST equivalent for backup.
-    - When set to none, the Volume blocks will not be tiered to the capacity tier.
-    - If no value specified, the volume is assigned snapshot only by default.
-    - Requires ONTAP 9.4 or later.
+      - The tiering policy that is to be associated with the volume.
+      - This policy decides whether the blocks of a volume will be tiered to the capacity tier.
+      - snapshot-only policy allows tiering of only the volume snapshot copies not associated with the active file system.
+      - auto policy allows tiering of both snapshot and active file system user data to the capacity tier.
+      - backup policy on DP volumes allows all transferred user data blocks to start in the capacity tier.
+      - all is the REST equivalent for backup.
+      - When set to none, the Volume blocks will not be tiered to the capacity tier.
+      - If no value specified, the volume is assigned snapshot only by default.
+      - Requires ONTAP 9.4 or later.
     choices: ['snapshot-only', 'auto', 'backup', 'none', 'all']
     type: str
     version_added: 2.9.0
 
   space_slo:
     description:
-    - Specifies the space SLO type for the volume. The space SLO type is the Service Level Objective for space management for the volume.
-    - The space SLO value is used to enforce existing volume settings so that sufficient space is set aside on the aggregate to meet the space SLO.
-    - This parameter is not supported on Infinite Volumes.
+      - Specifies the space SLO type for the volume. The space SLO type is the Service Level Objective for space management for the volume.
+      - The space SLO value is used to enforce existing volume settings so that sufficient space is set aside on the aggregate to meet the space SLO.
+      - This parameter is not supported on Infinite Volumes.
     choices: ['none', 'thick', 'semi-thick']
     type: str
     version_added: 2.9.0
 
   nvfail_enabled:
     description:
-    - If true, the controller performs additional work at boot and takeover times if it finds that there has been any potential data loss in the volume's
-      constituents due to an NVRAM failure.
-    - The volume's constituents would be put in a special state called 'in-nvfailed-state' such that protocol access is blocked.
-    - This will cause the client applications to crash and thus prevent access to stale data.
-    - To get out of this situation, the admin needs to manually clear the 'in-nvfailed-state' on the volume's constituents.
+      - If true, the controller performs additional work at boot and takeover times if it finds that there has been any potential data loss in the volume's
+        constituents due to an NVRAM failure.
+      - The volume's constituents would be put in a special state called 'in-nvfailed-state' such that protocol access is blocked.
+      - This will cause the client applications to crash and thus prevent access to stale data.
+      - To get out of this situation, the admin needs to manually clear the 'in-nvfailed-state' on the volume's constituents.
     type: bool
     version_added: 2.9.0
 
   vserver_dr_protection:
     description:
-    - Specifies the protection type for the volume in a Vserver DR setup.
+      - Specifies the protection type for the volume in a Vserver DR setup.
     choices: ['protected', 'unprotected']
     type: str
     version_added: 2.9.0
 
   comment:
     description:
-    - Sets a comment associated with the volume.
+      - Sets a comment associated with the volume.
     type: str
     version_added: 2.9.0
 
   snapshot_auto_delete:
     description:
-    - A dictionary for the auto delete options and values.
-    - Supported options include 'state', 'commitment', 'trigger', 'target_free_space', 'delete_order', 'defer_delete',
-      'prefix', 'destroy_list'.
-    - Option 'state' determines if the snapshot autodelete is currently enabled for the volume. Possible values are 'on' and 'off'.
-    - Option 'commitment' determines the snapshots which snapshot autodelete is allowed to delete to get back space.
-      Possible values are 'try', 'disrupt' and 'destroy'.
-    - Option 'trigger' determines the condition which starts the automatic deletion of snapshots.
-      Possible values are 'volume', 'snap_reserve' and DEPRECATED 'space_reserve'.
-    - Option 'target_free_space' determines when snapshot autodelete should stop deleting snapshots. Depending on the trigger,
-      snapshots are deleted till we reach the target free space percentage. Accepts int type.
-    - Option 'delete_order' determines if the oldest or newest snapshot is deleted first. Possible values are 'newest_first' and 'oldest_first'.
-    - Option 'defer_delete' determines which kind of snapshots to delete in the end. Possible values are 'scheduled', 'user_created',
-      'prefix' and 'none'.
-    - Option 'prefix' can be set to provide the prefix string for the 'prefix' value of the 'defer_delete' option.
-      The prefix string length can be 15 char long.
-    - Option 'destroy_list' is a comma seperated list of services which can be destroyed if the snapshot backing that service is deleted.
-      For 7-mode, the possible values for this option are a combination of 'lun_clone', 'vol_clone', 'cifs_share', 'file_clone' or 'none'.
-      For cluster-mode, the possible values for this option are a combination of 'lun_clone,file_clone' (for LUN clone and/or file clone),
-      'lun_clone,sfsr' (for LUN clone and/or sfsr), 'vol_clone', 'cifs_share', or 'none'.
+      - A dictionary for the auto delete options and values.
+      - Supported options include 'state', 'commitment', 'trigger', 'target_free_space', 'delete_order', 'defer_delete',
+        'prefix', 'destroy_list'.
+      - Option 'state' determines if the snapshot autodelete is currently enabled for the volume. Possible values are 'on' and 'off'.
+      - Option 'commitment' determines the snapshots which snapshot autodelete is allowed to delete to get back space.
+        Possible values are 'try', 'disrupt' and 'destroy'.
+      - Option 'trigger' determines the condition which starts the automatic deletion of snapshots.
+        Possible values are 'volume', 'snap_reserve' and DEPRECATED 'space_reserve'.
+      - Option 'target_free_space' determines when snapshot autodelete should stop deleting snapshots. Depending on the trigger,
+        snapshots are deleted till we reach the target free space percentage. Accepts int type.
+      - Option 'delete_order' determines if the oldest or newest snapshot is deleted first. Possible values are 'newest_first' and 'oldest_first'.
+      - Option 'defer_delete' determines which kind of snapshots to delete in the end. Possible values are 'scheduled', 'user_created',
+        'prefix' and 'none'.
+      - Option 'prefix' can be set to provide the prefix string for the 'prefix' value of the 'defer_delete' option.
+        The prefix string length can be 15 char long.
+      - Option 'destroy_list' is a comma seperated list of services which can be destroyed if the snapshot backing that service is deleted.
+        For 7-mode, the possible values for this option are a combination of 'lun_clone', 'vol_clone', 'cifs_share', 'file_clone' or 'none'.
+        For cluster-mode, the possible values for this option are a combination of 'lun_clone,file_clone' (for LUN clone and/or file clone),
+        'lun_clone,sfsr' (for LUN clone and/or sfsr), 'vol_clone', 'cifs_share', or 'none'.
     type: dict
     version_added: '20.4.0'
 
   cutover_action:
     description:
-    - Specifies the action to be taken for cutover.
-    - Possible values are 'abort_on_failure', 'defer_on_failure', 'force' and 'wait'. Default is 'defer_on_failure'.
+      - Specifies the action to be taken for cutover.
+      - Possible values are 'abort_on_failure', 'defer_on_failure', 'force' and 'wait'. Default is 'defer_on_failure'.
     choices: ['abort_on_failure', 'defer_on_failure', 'force', 'wait']
     type: str
     version_added: '20.5.0'
 
   check_interval:
     description:
-    - The amount of time in seconds to wait between checks of a volume to see if it has moved successfully.
+      - The amount of time in seconds to wait between checks of a volume to see if it has moved successfully.
     default: 30
     type: int
     version_added: '20.6.0'
 
   from_vserver:
     description:
-    - The source vserver of the volume is rehosted.
+      - The source vserver of the volume is rehosted.
     type: str
     version_added: '20.6.0'
 
   auto_remap_luns:
     description:
-    - Flag to control automatic map of LUNs.
+      - Flag to control automatic map of LUNs.
     type: bool
     version_added: '20.6.0'
 
   force_unmap_luns:
     description:
-    - Flag to control automatic unmap of LUNs.
+      - Flag to control automatic unmap of LUNs.
     type: bool
     version_added: '20.6.0'
 
   force_restore:
     description:
-    - If this field is set to "true", the Snapshot copy is restored even if the volume has one or more newer Snapshot
-      copies which are currently used as reference Snapshot copy by SnapMirror. If a restore is done in this
-      situation, this will cause future SnapMirror transfers to fail.
-    - Option should only be used along with snapshot_restore.
+      - If this field is set to "true", the Snapshot copy is restored even if the volume has one or more newer Snapshot
+        copies which are currently used as reference Snapshot copy by SnapMirror. If a restore is done in this
+        situation, this will cause future SnapMirror transfers to fail.
+      - Option should only be used along with snapshot_restore.
     type: bool
     version_added: '20.6.0'
 
   preserve_lun_ids:
     description:
-    - If this field is set to "true", LUNs in the volume being restored will remain mapped and their identities
-      preserved such that host connectivity will not be disrupted during the restore operation. I/O's to the LUN will
-      be fenced during the restore operation by placing the LUNs in an unavailable state. Once the restore operation
-      has completed, hosts will be able to resume I/O access to the LUNs.
-    - Option should only be used along with snapshot_restore.
+      - If this field is set to "true", LUNs in the volume being restored will remain mapped and their identities
+        preserved such that host connectivity will not be disrupted during the restore operation. I/O's to the LUN will
+        be fenced during the restore operation by placing the LUNs in an unavailable state. Once the restore operation
+        has completed, hosts will be able to resume I/O access to the LUNs.
+      - Option should only be used along with snapshot_restore.
     type: bool
     version_added: '20.6.0'
 
   snapshot_restore:
     description:
-    - Name of snapshot to restore from.
-    - Not supported on Infinite Volume.
+      - Name of snapshot to restore from.
+      - Not supported on Infinite Volume.
     type: str
     version_added: '20.6.0'
 
   compression:
     description:
-    - Whether to enable compression for the volume (HDD and Flash Pool aggregates).
-    - If this option is not present, it is automatically set to true if inline_compression is true.
+      - Whether to enable compression for the volume (HDD and Flash Pool aggregates).
+      - If this option is not present, it is automatically set to true if inline_compression is true.
     type: bool
     version_added: '20.12.0'
 
   inline_compression:
     description:
-    - Whether to enable inline compression for the volume (HDD and Flash Pool aggregates, AFF platforms).
+      - Whether to enable inline compression for the volume (HDD and Flash Pool aggregates, AFF platforms).
     type: bool
     version_added: '20.12.0'
 
   tiering_minimum_cooling_days:
     description:
-    - Determines how many days must pass before inactive data in a volume using the Auto or Snapshot-Only policy is
-      considered cold and eligible for tiering.
-    - This option is only supported in REST 9.8 or later.
+      - Determines how many days must pass before inactive data in a volume using the Auto or Snapshot-Only policy is
+        considered cold and eligible for tiering.
+      - This option is only supported in REST 9.8 or later.
     type: int
     version_added: '20.16.0'
 
   logical_space_enforcement:
     description:
-    - This optionally specifies whether to perform logical space accounting on the volume. When space is enforced
-      logically, ONTAP enforces volume settings such that all the physical space saved by the storage efficiency
-      features will be calculated as used.
-    - This is only supported with REST.
+      - This optionally specifies whether to perform logical space accounting on the volume. When space is enforced
+        logically, ONTAP enforces volume settings such that all the physical space saved by the storage efficiency
+        features will be calculated as used.
+      - This is only supported with REST.
     type: bool
     version_added: '20.16.0'
 
   logical_space_reporting:
     description:
-    - This optionally specifies whether to report space logically on the volume. When space is reported logically,
-      ONTAP reports the volume space such that all the physical space saved by the storage efficiency features are also
-      reported as used.
-    - This is only supported with REST.
+      - This optionally specifies whether to report space logically on the volume. When space is reported logically,
+        ONTAP reports the volume space such that all the physical space saved by the storage efficiency features are also
+        reported as used.
+      - This is only supported with REST.
     type: bool
     version_added: '20.16.0'
 
@@ -614,11 +625,20 @@ options:
 
   max_files:
     description:
-    - The maximum number of files (inodes) for user-visible data allowed on the volume.
-    - Note - ONTAP allocates a slightly different value, for instance 3990 when asking for 4000.
-      Tp preserve idempotency, small variations in size are ignored.
+      - The maximum number of files (inodes) for user-visible data allowed on the volume.
+      - Note - ONTAP allocates a slightly different value, for instance 3990 when asking for 4000.
+        Tp preserve idempotency, small variations in size are ignored.
     type: int
     version_added: '20.18.0'
+
+  analytics:
+    description:
+      - Set file system analytics state of the volume.
+      - Only supported with REST and requires ONTAP 9.8 or later version.
+      - Cannot enable analytics for volume that contains luns.
+    type: str
+    version_added: '22.0.0'
+    choices: ['on', 'off']
 
 notes:
   - supports REST and ZAPI.  REST requires ONTAP 9.6 or later.  Efficiency with REST requires ONTAP 9.7 or later.
@@ -633,7 +653,7 @@ notes:
 EXAMPLES = """
 
     - name: Create FlexVol
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: present
         name: ansibleVolume12
         is_infinite: False
@@ -657,7 +677,7 @@ EXAMPLES = """
         password: "{{ netapp_password }}"
 
     - name: Volume Delete
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: absent
         name: ansibleVolume12
         aggregate_name: ansible_aggr
@@ -667,7 +687,7 @@ EXAMPLES = """
         password: "{{ netapp_password }}"
 
     - name: Make FlexVol offline
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: present
         name: ansibleVolume
         is_infinite: False
@@ -678,7 +698,7 @@ EXAMPLES = """
         password: "{{ netapp_password }}"
 
     - name: Create Flexgroup volume manually
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: present
         name: ansibleVolume
         is_infinite: False
@@ -698,7 +718,7 @@ EXAMPLES = """
         time_out: 0
 
     - name: Create Flexgroup volume auto provsion as flex group
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: present
         name: ansibleVolume
         is_infinite: False
@@ -717,7 +737,7 @@ EXAMPLES = """
         time_out: 0
 
     - name: Create FlexVol with QoS adaptive
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: present
         name: ansibleVolume15
         is_infinite: False
@@ -735,7 +755,7 @@ EXAMPLES = """
         password: "{{ netapp_password }}"
 
     - name: Modify volume dr protection (vserver of the volume must be in a snapmirror relationship)
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: present
         name: ansibleVolume
         vserver_dr_protection: protected
@@ -746,7 +766,7 @@ EXAMPLES = """
         https: False
 
     - name: Modify volume with snapshot auto delete options
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: present
         name: vol_auto_delete
         snapshot_auto_delete:
@@ -764,7 +784,7 @@ EXAMPLES = """
         https: False
 
     - name: Move volume with force cutover action
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         name: ansible_vol
         aggregate_name: aggr_ansible
         cutover_action: force
@@ -775,7 +795,7 @@ EXAMPLES = """
         https: false
 
     - name: Rehost volume to another vserver auto remap luns
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         name: ansible_vol
         from_vserver: ansible
         auto_remap_luns: true
@@ -786,7 +806,7 @@ EXAMPLES = """
         https: false
 
     - name: Rehost volume to another vserver force unmap luns
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         name: ansible_vol
         from_vserver: ansible
         force_unmap_luns: true
@@ -797,7 +817,7 @@ EXAMPLES = """
         https: false
 
     - name: Snapshot restore volume
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         name: ansible_vol
         vserver: ansible
         snapshot_restore: 2020-05-24-weekly
@@ -810,7 +830,7 @@ EXAMPLES = """
         validate_certs: false
 
     - name: Volume create using application/applications nas template
-      na_ontap_volume:
+      netapp.ontap.na_ontap_volume:
         state: present
         name: ansibleVolume12
         vserver: ansibleSVM
@@ -846,7 +866,6 @@ from ansible.module_utils._text import to_native
 import ansible_collections.netapp.ontap.plugins.module_utils.netapp as netapp_utils
 from ansible_collections.netapp.ontap.plugins.module_utils.netapp_module import NetAppModule
 from ansible_collections.netapp.ontap.plugins.module_utils.rest_application import RestApplication
-from ansible_collections.netapp.ontap.plugins.module_utils.netapp import OntapRestAPI
 from ansible_collections.netapp.ontap.plugins.module_utils import rest_volume
 from ansible_collections.netapp.ontap.plugins.module_utils import rest_generic
 
@@ -887,6 +906,7 @@ class NetAppOntapVolume:
             auto_provision_as=dict(choices=['flexgroup'], required=False, type='str'),
             wait_for_completion=dict(required=False, type='bool', default=False),
             time_out=dict(required=False, type='int', default=180),
+            max_wait_time=dict(required=False, type='int', default=600),
             language=dict(type='str', required=False),
             qos_policy_group=dict(required=False, type='str'),
             qos_adaptive_policy_group=dict(required=False, type='str'),
@@ -945,6 +965,7 @@ class NetAppOntapVolume:
                 type=dict(required=False, type='str', choices=['compliance', 'enterprise', 'non_snaplock'])
             )),
             max_files=dict(required=False, type='int'),
+            analytics=dict(required=False, type='str', choices=['on', 'off'])
         ))
 
         self.module = AnsibleModule(
@@ -954,7 +975,7 @@ class NetAppOntapVolume:
             ],
             supports_check_mode=True
         )
-        self.na_helper = NetAppModule(self.module)
+        self.na_helper = NetAppModule(self)
         self.parameters = self.na_helper.check_and_set_parameters(self.module)
         self.volume_style = None
         self.volume_created = False
@@ -972,31 +993,27 @@ class NetAppOntapVolume:
             self.parameters['size'] = self.parameters['size'] * \
                 netapp_utils.POW2_BYTE_MAP[self.parameters['size_unit']]
         self.validate_snapshot_auto_delete()
-        self.rest_api = OntapRestAPI(self.module)
+        self.rest_api = netapp_utils.OntapRestAPI(self.module)
         unsupported_rest_properties = ['atime_update',
                                        'cutover_action',
                                        'encrypt-destination',
                                        'force_restore',
                                        'nvfail_enabled',
                                        'preserve_lun_ids',
-                                       'snapdir-access-enabled',
+                                       'snapdir_access',
                                        'snapshot_auto_delete',
                                        'space_slo',
                                        'vserver_dr_protection']
-        partially_supported_rest_properties = [['efficiency_policy', (9, 7)], ['tiering_minimum_cooling_days', (9, 8)]]
-        self.unsupported_zapi_properties = ['sizing_method', 'logical_space_enforcement', 'logical_space_reporting', 'snaplock']
+        partially_supported_rest_properties = [['efficiency_policy', (9, 7)], ['tiering_minimum_cooling_days', (9, 8)], ['analytics', (9, 8)]]
+        self.unsupported_zapi_properties = ['sizing_method', 'logical_space_enforcement', 'logical_space_reporting', 'snaplock', 'analytics']
         self.use_rest = self.rest_api.is_rest_supported_properties(self.parameters, unsupported_rest_properties, partially_supported_rest_properties)
-        if self.use_rest and self.parameters['use_rest'].lower() == 'auto':
-            self.module.warn(
-                'Falling back to ZAPI as REST support for na_ontap_volume is in beta and use_rest: auto.  Set use_rest: always to force REST.')
-            self.use_rest = False
 
         if not self.use_rest:
             self.setup_zapi()
         if self.use_rest:
             self.rest_errors()
 
-        # REST API for application/applications if needed
+        # REST API for application/applications if needed - will report an error when REST is not supported
         self.rest_app = self.setup_rest_application()
 
     def setup_zapi(self):
@@ -1005,8 +1022,11 @@ class NetAppOntapVolume:
 
         for unsupported_zapi_property in self.unsupported_zapi_properties:
             if self.parameters.get(unsupported_zapi_property) is not None:
-                self.module.fail_json(
-                    msg="%s option is not supported with ZAPI. It can only be used with REST." % unsupported_zapi_property)
+                msg = "Error: %s option is not supported with ZAPI.  It can only be used with REST." % unsupported_zapi_property
+                msg += '  use_rest: %s.' % self.parameters['use_rest']
+                if self.rest_api.fallback_to_zapi_reason:
+                    msg += '  Conflict %s.' % self.rest_api.fallback_to_zapi_reason
+                self.module.fail_json(msg=msg)
         self.server = netapp_utils.setup_na_ontap_zapi(module=self.module, vserver=self.parameters['vserver'])
         self.cluster = netapp_utils.setup_na_ontap_zapi(module=self.module)
 
@@ -1018,9 +1038,14 @@ class NetAppOntapVolume:
                     self.module.fail_json(msg="snapshot_auto_delete option '%s' is not valid." % key)
 
     def setup_rest_application(self):
-        use_application_template = self.na_helper.safe_get(self.parameters, ['nas_application_template', 'use_nas_application'])
         rest_app = None
-        if use_application_template:
+        if self.na_helper.safe_get(self.parameters, ['nas_application_template', 'use_nas_application']):
+            if not self.use_rest:
+                msg = 'Error: nas_application_template requires REST support.'
+                msg += '  use_rest: %s.' % self.parameters['use_rest']
+                if self.rest_api.fallback_to_zapi_reason:
+                    msg += '  Conflict %s.' % self.rest_api.fallback_to_zapi_reason
+                self.module.fail_json(msg=msg)
             # consistency checks
             # tiering policy is duplicated, make sure values are matching
             tiering_policy_nas = self.na_helper.safe_get(self.parameters, ['nas_application_template', 'tiering', 'policy'])
@@ -1157,7 +1182,7 @@ class NetAppOntapVolume:
                               else None)
 
             # snapshot_auto_delete options
-            auto_delete = dict()
+            auto_delete = {}
             self. get_snapshot_auto_delete_attributes(volume_attributes, auto_delete)
             result['snapshot_auto_delete'] = auto_delete
 
@@ -1234,7 +1259,7 @@ class NetAppOntapVolume:
         nas = dict(application_components=[self.create_nas_application_component()])
         value = self.na_helper.safe_get(self.parameters, ['snapshot_policy'])
         if value is not None:
-            nas['protection_type'] = dict(local_policy=value)
+            nas['protection_type'] = {'local_policy': value}
         for attr in ('nfs_access', 'cifs_access'):
             value = self.na_helper.safe_get(self.parameters, ['nas_application_template', attr])
             if value is not None:
@@ -1246,7 +1271,7 @@ class NetAppOntapVolume:
             values = self.na_helper.safe_get(self.parameters, ['nas_application_template', attr])
             if values:
                 nas[attr] = [dict(name=name) for name in values]
-        return self.rest_app.create_application_body("nas", nas)
+        return self.rest_app.create_application_body("nas", nas, smart_container=True)
 
     def create_nas_application(self):
         '''Use REST application/applications nas template to create a volume'''
@@ -1289,7 +1314,7 @@ class NetAppOntapVolume:
                     errors.append(repr(err))
                 if not is_online:
                     time.sleep(10)
-                retries = retries - 1
+                retries -= 1
             if not is_online:
                 errors.append("Timeout after %s seconds" % self.parameters['time_out'])
                 self.module.fail_json(msg='Error waiting for volume %s to come online: %s'
@@ -1381,17 +1406,6 @@ class NetAppOntapVolume:
             options['volume-state'] = 'offline'
         return options
 
-    def rest_unmount_volume(self, uuid, current):
-        """
-        Unmount the volume using REST PATCH method.
-        """
-        response = None
-        if current.get('junction_path'):
-            body = dict(nas=dict(path=''))
-            response, error = self.volume_rest_patch(body)
-            self.na_helper.fail_on_error(error)
-        return response
-
     def rest_delete_volume(self, current):
         """
         Delete the volume using REST DELETE method (it scrubs better than ZAPI).
@@ -1399,36 +1413,63 @@ class NetAppOntapVolume:
         uuid = self.parameters['uuid']
         if uuid is None:
             self.module.fail_json(msg='Could not read UUID for volume %s in delete.' % self.parameters['name'])
-        self.rest_unmount_volume(uuid, current)
-        response, error = rest_generic.delete_async(self.rest_api, 'storage/volumes', uuid, job_timeout=self.parameters['time_out'])
-        self.na_helper.fail_on_error(error)
-        return response
+        unmount_error = self.volume_unmount_rest(fail_on_error=False) if current.get('junction_path') else None
+        dummy, error = rest_generic.delete_async(self.rest_api, 'storage/volumes', uuid, job_timeout=self.parameters['time_out'])
+        self.na_helper.fail_on_error(error, previous_errors=(['Error unmounting volume: %s' % unmount_error] if unmount_error else None))
+        if unmount_error:
+            self.module.warn('Volume was successfully deleted though unmount failed with: %s' % unmount_error)
+
+    def delete_volume_async(self, current):
+        '''Delete ONTAP volume for infinite or flexgroup types '''
+        errors = None
+        if current['is_online']:
+            dummy, errors = self.change_volume_state(call_from_delete_vol=True)
+        volume_delete = netapp_utils.zapi.NaElement.create_node_with_children(
+            'volume-destroy-async', **{'volume-name': self.parameters['name']})
+        try:
+            result = self.server.invoke_successfully(volume_delete, enable_tunneling=True)
+            self.check_invoke_result(result, 'delete')
+        except netapp_utils.zapi.NaApiError as error:
+            msg = 'Error deleting volume %s: %s.' % (self.parameters['name'], to_native(error))
+            if errors:
+                msg += '  Previous errors when offlining/unmounting volume: %s' % ' - '.join(errors)
+            self.module.fail_json(msg=msg)
+
+    def delete_volume_sync(self, current, unmount_offline):
+        '''Delete ONTAP volume for flexvol types '''
+        options = {'name': self.parameters['name']}
+        if unmount_offline:
+            options['unmount-and-offline'] = 'true'
+        volume_delete = netapp_utils.zapi.NaElement.create_node_with_children(
+            'volume-destroy', **options)
+        try:
+            result = self.server.invoke_successfully(volume_delete, enable_tunneling=True)
+        except netapp_utils.zapi.NaApiError as error:
+            return error
+        return None
 
     def delete_volume(self, current):
         '''Delete ONTAP volume'''
         if self.use_rest and self.parameters['uuid'] is not None:
             return self.rest_delete_volume(current)
         if self.parameters.get('is_infinite') or self.volume_style == 'flexgroup':
-            if current['is_online']:
-                self.change_volume_state(call_from_delete_vol=True)
-            volume_delete = netapp_utils.zapi.NaElement.create_node_with_children(
-                'volume-destroy-async', **{'volume-name': self.parameters['name']})
-        else:
-            volume_delete = netapp_utils.zapi.NaElement.create_node_with_children(
-                'volume-destroy', **{'name': self.parameters['name'], 'unmount-and-offline': 'true'})
-        try:
-            result = self.server.invoke_successfully(volume_delete, enable_tunneling=True)
-            if self.parameters.get('is_infinite') or self.volume_style == 'flexgroup':
-                self.check_invoke_result(result, 'delete')
-        except netapp_utils.zapi.NaApiError as error:
+            return self.delete_volume_async(current)
+        errors = []
+        error = self.delete_volume_sync(current, True)
+        if error:
+            errors.append('volume delete failed with unmount-and-offline option: %s' % to_native(error))
+            error = self.delete_volume_sync(current, False)
+        if error:
+            errors.append('volume delete failed without unmount-and-offline option: %s' % to_native(error))
+        if errors:
             self.module.fail_json(msg='Error deleting volume %s: %s'
-                                  % (self.parameters['name'], to_native(error)),
+                                  % (self.parameters['name'], ' - '.join(errors)),
                                   exception=traceback.format_exc())
 
     def move_volume(self, encrypt_destination=None):
         '''Move volume from source aggregate to destination aggregate'''
         if self.use_rest:
-            return self.move_volume_rest()
+            return self.move_volume_rest(encrypt_destination)
         volume_move = netapp_utils.zapi.NaElement.create_node_with_children(
             'volume-move-start', **{'source-volume': self.parameters['name'],
                                     'vserver': self.parameters['vserver'],
@@ -1468,12 +1509,17 @@ class NetAppOntapVolume:
         return error
 
     def check_volume_move_state(self, result):
-        volume_move_status = result.get_child_by_name('attributes-list').get_child_by_name('volume-move-info').get_child_content('state')
+        if self.use_rest:
+            volume_move_status = self.na_helper.safe_get(result, ['movement', 'state'])
+        else:
+            volume_move_status = result.get_child_by_name('attributes-list').get_child_by_name('volume-move-info').get_child_content('state')
         # We have 5 states that can be returned.
         # warning and healthy are state where the move is still going so we don't need to do anything for thouse.
-        if volume_move_status == 'done':
+        # success - volume move is completed in REST.
+        if volume_move_status in ['success', 'done']:
             return False
-        if volume_move_status in ['failed', 'alert']:
+        # ZAPI returns failed or alert, REST returns failed or aborted.
+        if volume_move_status in ['failed', 'alert', 'aborted']:
             self.module.fail_json(msg='Error moving volume %s: %s' %
                                   (self.parameters['name'], result.get_child_by_name('attributes-list').get_child_by_name('volume-move-info')
                                    .get_child_content('details')))
@@ -1491,17 +1537,36 @@ class NetAppOntapVolume:
             self.module.fail_json(msg='Error getting volume move status: %s' % (to_native(error)),
                                   exception=traceback.format_exc())
 
+    def wait_for_volume_move_rest(self):
+        api = "storage/volumes"
+        query = {
+            'name': self.parameters['name'],
+            'movement.destination_aggregate.name': self.parameters['aggregate_name'],
+            'fields': 'movement.state'
+        }
+        error = self.wait_for_task_completion_rest(api, query, self.check_volume_move_state)
+        if error:
+            self.module.fail_json(msg='Error getting volume move status: %s' % (to_native(error)),
+                                  exception=traceback.format_exc())
+
     def check_volume_encryption_conversion_state(self, result):
-        volume_encryption_conversion_status = result.get_child_by_name('attributes-list').get_child_by_name('volume-encryption-conversion-info')\
-                                                    .get_child_content('status')
-        if volume_encryption_conversion_status == 'running':
+        if self.use_rest:
+            volume_encryption_conversion_status = self.na_helper.safe_get(result, ['encryption', 'status', 'message'])
+        else:
+            volume_encryption_conversion_status = result.get_child_by_name('attributes-list').get_child_by_name('volume-encryption-conversion-info')\
+                                                        .get_child_content('status')
+        # REST returns running or initializing, ZAPI returns running if encryption in progress.
+        if volume_encryption_conversion_status in ['running', 'initializing']:
             return True
-        if volume_encryption_conversion_status == 'Not currently going on.':
+        # If encryprion is completed, REST do have encryption status message.
+        if volume_encryption_conversion_status in ['Not currently going on.', None]:
             return False
         self.module.fail_json(msg='Error converting encryption for volume %s: %s' %
                               (self.parameters['name'], volume_encryption_conversion_status))
 
     def wait_for_volume_encryption_conversion(self):
+        if self.use_rest:
+            return self.wait_for_volume_encryption_conversion_rest()
         volume_encryption_conversion_iter = netapp_utils.zapi.NaElement('volume-encryption-conversion-get-iter')
         volume_encryption_conversion_info = netapp_utils.zapi.NaElement('volume-encryption-conversion-info')
         volume_encryption_conversion_info.add_new_child('volume', self.parameters['name'])
@@ -1514,15 +1579,27 @@ class NetAppOntapVolume:
             self.module.fail_json(msg='Error getting volume encryption_conversion status: %s' % (to_native(error)),
                                   exception=traceback.format_exc())
 
+    def wait_for_volume_encryption_conversion_rest(self):
+        api = "storage/volumes"
+        query = {
+            'name': self.parameters['name'],
+            'fields': 'encryption'
+        }
+        error = self.wait_for_task_completion_rest(api, query, self.check_volume_encryption_conversion_state)
+        if error:
+            self.module.fail_json(msg='Error getting volume encryption_conversion status: %s' % (to_native(error)),
+                                  exception=traceback.format_exc())
+
     def wait_for_task_completion(self, zapi_iter, check_state):
-        waiting = True
+        retries = self.parameters['max_wait_time'] // (self.parameters['check_interval'] + 1)
         fail_count = 0
-        while waiting:
+        while retries > 0:
             try:
                 result = self.cluster.invoke_successfully(zapi_iter, enable_tunneling=True)
             except netapp_utils.zapi.NaApiError as error:
                 if fail_count < 3:
                     fail_count += 1
+                    retries -= 1
                     time.sleep(self.parameters['check_interval'])
                     continue
                 return error
@@ -1530,9 +1607,33 @@ class NetAppOntapVolume:
                 return None
             # reset fail count to 0
             fail_count = 0
-            waiting = check_state(result)
-            if waiting:
-                time.sleep(self.parameters['check_interval'])
+            retry_required = check_state(result)
+            if not retry_required:
+                return None
+            time.sleep(self.parameters['check_interval'])
+            retries -= 1
+
+    def wait_for_task_completion_rest(self, api, query, check_state):
+        retries = self.parameters['max_wait_time'] // (self.parameters['check_interval'] + 1)
+        fail_count = 0
+        while retries > 0:
+            record, error = rest_generic.get_one_record(self.rest_api, api, query)
+            if error:
+                if fail_count < 3:
+                    fail_count += 1
+                    retries -= 1
+                    time.sleep(self.parameters['check_interval'])
+                    continue
+                return error
+            if record is None:
+                return None
+            # reset fail count to 0
+            fail_count = 0
+            retry_required = check_state(record)
+            if not retry_required:
+                return None
+            time.sleep(self.parameters['check_interval'])
+            retries -= 1
 
     def rename_volume(self):
         """
@@ -1633,9 +1734,9 @@ class NetAppOntapVolume:
                 self.check_invoke_result(result, action)
         except netapp_utils.zapi.NaApiError as error:
             errors.append('Error changing the state of volume %s to %s: %s' % (self.parameters['name'], state, to_native(error)))
-            self.module.fail_json(msg=', '.join(errors),
-                                  exception=traceback.format_exc())
-        return state
+        if errors and not call_from_delete_vol:
+            self.module.fail_json(msg=', '.join(errors), exception=traceback.format_exc())
+        return state, errors
 
     def create_volume_attribute(self, zapi_object, parent_attribute, attribute, option_name, convert_from=None):
         """
@@ -1657,7 +1758,9 @@ class NetAppOntapVolume:
             parent_attribute.add_new_child(attribute, value)
             return
         if isinstance(zapi_object, str):
-            zapi_object = netapp_utils.zapi.NaElement(zapi_object)
+            # retrieve existing in parent, or create a new one
+            element = parent_attribute.get_child_by_name(zapi_object)
+            zapi_object = netapp_utils.zapi.NaElement(zapi_object) if element is None else element
         zapi_object.add_new_child(attribute, value)
         parent_attribute.add_child_elem(zapi_object)
 
@@ -1806,13 +1909,15 @@ class NetAppOntapVolume:
         '''Modify volume action'''
         attributes = modify.keys()
         # order matters here, if both is_online and mount in modify, must bring the volume online first.
-        is_online = self.change_volume_state() == 'online' if 'is_online' in attributes else is_online
+        if 'is_online' in attributes:
+            state, dummy = self.change_volume_state()
+            is_online = state == 'online'
         for attribute in attributes:
             if attribute in ['space_guarantee', 'export_policy', 'unix_permissions', 'group_id', 'user_id', 'tiering_policy',
                              'snapshot_policy', 'percent_snapshot_space', 'snapdir_access', 'atime_update', 'volume_security_style',
                              'nvfail_enabled', 'space_slo', 'qos_policy_group', 'qos_adaptive_policy_group', 'vserver_dr_protection',
                              'comment', 'logical_space_enforcement', 'logical_space_reporting', 'tiering_minimum_cooling_days',
-                             'snaplock', 'max_files']:
+                             'snaplock', 'max_files', 'analytics']:
                 self.volume_modify_attributes(modify)
                 break
         if 'snapshot_auto_delete' in attributes and not self.use_rest:
@@ -1830,7 +1935,8 @@ class NetAppOntapVolume:
         if 'aggregate_name' in attributes:
             # keep it last, as it may take some time
             # handle change in encryption as part of the move
-            self.move_volume(self.parameters.get('encrypt'))
+            # allow for encrypt/decrypt only if encrypt present in attributes.
+            self.move_volume(modify.get('encrypt'))
         elif 'encrypt' in attributes:
             self.start_encryption_conversion(self.parameters['encrypt'])
 
@@ -1872,8 +1978,10 @@ class NetAppOntapVolume:
         server = self.server
         sleep_time = 5
         time_out = self.parameters['time_out']
-        results = self.get_job(jobid, server)
         error = 'timeout'
+
+        if time_out <= 0:
+            results = self.get_job(jobid, server)
 
         while time_out > 0:
             results = self.get_job(jobid, server)
@@ -2077,7 +2185,7 @@ class NetAppOntapVolume:
             if change < threshold:
                 self.parameters[attribute] = current[attribute]
                 if change > 0.1:
-                    self.module.warn('resize request for %s ignored: %.1f%% is below the threshold: %d%%' % (attribute, change, threshold))
+                    self.module.warn('resize request for %s ignored: %.1f%% is below the threshold: %.1f%%' % (attribute, change, threshold))
 
     def adjust_sizes(self, current, after_create):
         """
@@ -2256,13 +2364,13 @@ class NetAppOntapVolume:
             params['fields'] += 'efficiency.policy.name,'
         if self.parameters.get('tiering_minimum_cooling_days'):
             params['fields'] += 'tiering.min_cooling_days,'
+        if self.parameters.get('analytics'):
+            params['fields'] += 'analytics,'
 
         record, error = rest_generic.get_one_record(self.rest_api, api, params)
         if error:
             self.module.fail_json(msg=error)
-        if record:
-            return self.format_get_volume_rest(record)
-        return None
+        return self.format_get_volume_rest(record) if record else None
 
     def rename_volume_rest(self):
         # volume-rename-async and volume-rename are the same in rest
@@ -2352,7 +2460,9 @@ class NetAppOntapVolume:
             body['efficiency.policy.name'] = self.parameters['efficiency_policy']
         if self.get_compression():
             body['efficiency.compression'] = self.get_compression()
-        body['state'] = 'online' if self.parameters['is_online'] else 'offline'
+        if self.parameters.get('analytics'):
+            body['analytics.state'] = self.parameters['analytics']
+        body['state'] = self.bool_to_online(self.parameters['is_online'])
         return body
 
     def aggregates_rest(self, body):
@@ -2371,69 +2481,76 @@ class NetAppOntapVolume:
             self.module.fail_json(msg='Error modifying volume %s: %s' % (self.parameters['name'], to_native(error)),
                                   exception=traceback.format_exc())
 
+    @staticmethod
+    def bool_to_online(item):
+        return 'online' if item else 'offline'
+
     def modify_volume_body_rest(self, params):
         body = {}
-        if self.parameters.get('space_guarantee') is not None:
-            body['guarantee.type'] = self.parameters['space_guarantee']
-        if self.parameters.get('percent_snapshot_space') is not None:
-            body['space.snapshot.reserve_percent'] = self.parameters['percent_snapshot_space']
-        if self.parameters.get('snapshot_policy') is not None:
-            body['snapshot_policy.name'] = self.parameters['snapshot_policy']
-        if self.parameters.get('export_policy') is not None:
-            body['nas.export_policy.name'] = self.parameters['export_policy']
-        if self.parameters.get('unix_permissions') is not None:
-            body['nas.unix_permissions'] = self.parameters['unix_permissions']
-        if self.parameters.get('group_id') is not None:
-            body['nas.gid'] = self.parameters['group_id']
-        if self.parameters.get('user_id') is not None:
-            body['nas.uid'] = self.parameters['user_id']
-        if params and params.get('volume_security_style') is not None:
-            body['nas.security_style'] = self.parameters['volume_security_style']
-        if self.get_qos_policy_group() is not None:
-            body['qos.policy.name'] = self.get_qos_policy_group()
-        if params and params.get('tiering_policy') is not None:
-            body['tiering.policy'] = self.parameters['tiering_policy']
-        if self.parameters.get('comment') is not None:
-            body['comment'] = self.parameters['comment']
-        if self.parameters.get('logical_space_enforcement') is not None:
-            body['space.logical_space.enforcement'] = self.parameters['logical_space_enforcement']
-        if self.parameters.get('logical_space_reporting') is not None:
-            body['space.logical_space.reporting'] = self.parameters['logical_space_reporting']
-        if self.parameters.get('tiering_minimum_cooling_days') is not None:
-            body['tiering.min_cooling_days'] = self.parameters['tiering_minimum_cooling_days']
+        for key, option, transform in [
+            ('analytics.state', 'analytics', None),
+            ('guarantee.type', 'space_guarantee', None),
+            ('space.snapshot.reserve_percent', 'percent_snapshot_space', None),
+            ('snapshot_policy.name', 'snapshot_policy', None),
+            ('nas.export_policy.name', 'export_policy', None),
+            ('nas.unix_permissions', 'unix_permissions', None),
+            ('nas.gid', 'group_id', None),
+            ('nas.uid', 'user_id', None),
+            # only one of these 2 options for QOS policy can be defined at most
+            ('qos.policy.name', 'qos_policy_group', None),
+            ('qos.policy.name', 'qos_adaptive_policy_group', None),
+            ('comment', 'comment', None),
+            ('space.logical_space.enforcement', 'logical_space_enforcement', None),
+            ('space.logical_space.reporting', 'logical_space_reporting', None),
+            ('tiering.min_cooling_days', 'tiering_minimum_cooling_days', None),
+            ('state', 'is_online', self.bool_to_online),
+        ]:
+            value = self.parameters.get(option)
+            if value is not None and transform:
+                value = transform(value)
+            if value is not None:
+                body[key] = value
+
+        # not too sure why we don't always set them
+        # one good reason are fields that are not supported on all releases
+        for key, option, transform in [
+            ('nas.security_style', 'volume_security_style', None),
+            ('tiering.policy', 'tiering_policy', None),
+            ('files.maximum', 'max_files', None),
+        ]:
+            if params and params.get(option) is not None:
+                body[key] = self.parameters[option]
+
         if params and params.get('snaplock') is not None:
-            sl_dict = self.na_helper.filter_out_none_entries(self.parameters['snaplock']) or []
+            sl_dict = self.na_helper.filter_out_none_entries(self.parameters['snaplock']) or {}
             # type is not allowed in patch, and we already prevented any change in type
             sl_dict.pop('type', None)
             if sl_dict:
                 body['snaplock'] = sl_dict
-        if params and params.get('max_files') is not None:
-            body['files'] = {'maximum': params['max_files']}
-        body['state'] = 'online' if self.parameters['is_online'] else 'offline'
         return body
 
     def change_volume_state_rest(self):
-        # TODO: check if call_from_delete_vol is needed in rest
         body = {
-            'state': 'online' if self.parameters['is_online'] else 'offline',
+            'state': self.bool_to_online(self.parameters['is_online']),
         }
         dummy, error = self.volume_rest_patch(body)
         if error:
             self.module.fail_json(msg='Error changing state of volume %s: %s' % (self.parameters['name'],
                                                                                  to_native(error)),
                                   exception=traceback.format_exc())
-        return body['state']
+        return body['state'], None
 
-    def volume_unmount_rest(self):
+    def volume_unmount_rest(self, fail_on_error=True):
         body = {
             'nas.path': '',
         }
         dummy, error = self.volume_rest_patch(body)
-        if error:
-            self.module.fail_json(msg='Error unmounting volume %s: with path "%s", %s' % (self.parameters['name'],
-                                                                                          self.parameters['junction_path'],
-                                                                                          to_native(error)),
+        if error and fail_on_error:
+            self.module.fail_json(msg='Error unmounting volume %s with path "%s": %s' % (self.parameters['name'],
+                                                                                         self.parameters.get('junction_path'),
+                                                                                         to_native(error)),
                                   exception=traceback.format_exc())
+        return error
 
     def volume_mount_rest(self):
         body = {
@@ -2441,7 +2558,9 @@ class NetAppOntapVolume:
         }
         dummy, error = self.volume_rest_patch(body)
         if error:
-            self.module.fail_json(msg='Error mounting volume %s: %s' % (self.parameters['name'], to_native(error)),
+            self.module.fail_json(msg='Error mounting volume %s with path "%s": %s' % (self.parameters['name'],
+                                                                                       self.parameters['junction_path'],
+                                                                                       to_native(error)),
                                   exception=traceback.format_exc())
 
     def set_efficiency_rest(self):
@@ -2468,6 +2587,8 @@ class NetAppOntapVolume:
             self.module.fail_json(msg='Error enabling encryption for volume %s: %s' % (self.parameters['name'],
                                                                                        to_native(error)),
                                   exception=traceback.format_exc())
+        if self.parameters.get('wait_for_completion'):
+            self.wait_for_volume_encryption_conversion_rest()
 
     def resize_volume_rest(self):
         query = None
@@ -2481,14 +2602,18 @@ class NetAppOntapVolume:
             self.module.fail_json(msg='Error resizing volume %s: %s' % (self.parameters['name'], to_native(error)),
                                   exception=traceback.format_exc())
 
-    def move_volume_rest(self):
+    def move_volume_rest(self, encrypt_destination):
         body = {
-            'movement.destination_aggregate.name': self.parameters['aggregate_name']
+            'movement.destination_aggregate.name': self.parameters['aggregate_name'],
         }
+        if encrypt_destination is not None:
+            body['encryption.enabled'] = encrypt_destination
         dummy, error = self.volume_rest_patch(body)
         if error:
             self.module.fail_json(msg='Error moving volume %s: %s' % (self.parameters['name'], to_native(error)),
                                   exception=traceback.format_exc())
+        if self.parameters.get('wait_for_completion'):
+            self.wait_for_volume_move_rest()
 
     def volume_rest_patch(self, body, query=None, uuid=None):
         if not uuid:
@@ -2538,8 +2663,12 @@ class NetAppOntapVolume:
         junction_path = self.na_helper.safe_get(record, ['nas', 'path'])
         if junction_path is None:
             junction_path = ''
+        # if analytics.state is initializing it will be ON once completed.
+        state = self.na_helper.safe_get(record, ['analytics', 'state'])
+        analytics = 'on' if state == 'initializing' else state
         return {
             'name': record.get('name', None),
+            'analytics': analytics,
             'encrypt': self.na_helper.safe_get(record, ['encryption', 'enabled']),
             'tiering_policy': self.na_helper.safe_get(record, ['tiering', 'policy']),
             'export_policy': self.na_helper.safe_get(record, ['nas', 'export_policy', 'name']),
@@ -2642,6 +2771,11 @@ class NetAppOntapVolume:
             # or maybe we could, using a cluster ZAPI, but since ZAPI is going away, is it worth it?
             modify = self.set_modify_dict(current)
             if modify:
+                # ZAPI decrypts volume using volume move api and aggregate name is required.
+                if not self.use_rest and modify.get('encrypt') is False and not self.parameters.get('aggregate_name'):
+                    self.parameters['aggregate_name'] = current['aggregate_name']
+                if self.use_rest and modify.get('encrypt') is False and not modify.get('aggregate_name'):
+                    self.module.fail_json(msg="Error: unencrypting volume is only supported when moving the volume to another aggregate in REST.")
                 actions.append('modify')
         if self.parameters.get('nas_application_template') is not None:
             application = self.get_application()
@@ -2656,13 +2790,7 @@ class NetAppOntapVolume:
 
     def apply(self):
         '''Call create/modify/delete operations'''
-        if not self.use_rest:
-            try:
-                netapp_utils.ems_log_event("na_ontap_volume", self.server)
-            except netapp_utils.zapi.NaApiError as error:
-                self.module.fail_json(msg="Error on vserver: %s: %s" % (self.parameters['vserver'], error))
         actions, current, modify = self.set_actions()
-
         response = None
         if self.na_helper.changed and not self.module.check_mode:
             if 'rename' in actions:
@@ -2692,15 +2820,7 @@ class NetAppOntapVolume:
                 self.parameters['uuid'] = current['uuid']
                 self.take_modify_actions(modify, current.get('is_online'))
 
-        result = dict(
-            changed=self.na_helper.changed
-        )
-        if response is not None:
-            result['response'] = response
-        if modify:
-            result['modify'] = modify
-        if actions:
-            result['actions'] = actions
+        result = netapp_utils.generate_result(self.na_helper.changed, actions, modify, response)
         self.module.exit_json(**result)
 
 

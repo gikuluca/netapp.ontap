@@ -381,8 +381,6 @@ class NetAppONTAPPortset:
         """
         Applies action from playbook
         """
-        if not self.use_rest:
-            netapp_utils.ems_log_event("na_ontap_autosupport", self.server)
         current, modify = self.portset_get(), None
         # get lifs type and uuid which is not present in current.
         if self.use_rest and self.parameters['state'] == 'present':
@@ -409,7 +407,8 @@ class NetAppONTAPPortset:
                 else:
                     self.add_ports(add_ports)
                     self.remove_ports(remove_ports)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

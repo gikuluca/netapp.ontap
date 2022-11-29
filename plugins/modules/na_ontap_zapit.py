@@ -18,7 +18,7 @@ description:
   - and the call is reported as an error ('failed').
   - Other errors (eg connection issues) are reported as Ansible error.
 extends_documentation_fragment:
-  - netapp.ontap.netapp.na_ontap
+  - netapp.ontap.netapp.na_ontap_zapi
 module: na_ontap_zapit
 short_description: NetApp ONTAP Run any ZAPI on ONTAP
 version_added: "20.4.0"
@@ -186,7 +186,7 @@ class NetAppONTAPZapi:
     ''' calls a ZAPI command '''
 
     def __init__(self):
-        self.argument_spec = netapp_utils.na_ontap_host_argument_spec()
+        self.argument_spec = netapp_utils.na_ontap_zapi_only_spec()
         self.argument_spec.update(dict(
             zapi=dict(required=True, type='dict'),
             vserver=dict(required=False, type='str'),
@@ -277,7 +277,6 @@ class NetAppONTAPZapi:
                 zapi = zapi[0]
 
         # log first, then error out as needed
-        self.ems(zapi)
         if error:
             self.module.fail_json(msg='%s, received: %s' % (error, zapi))
 
@@ -294,20 +293,6 @@ class NetAppONTAPZapi:
                                   exception=traceback.format_exc())
 
         return self.jsonify_and_parse_output(output)
-
-    def ems(self, zapi):
-        """
-        Log EMS event, but ignore any error.
-        :return:
-        """
-        event = "na_ontap_zapi: " + str(zapi)
-        try:
-            if self.vserver:
-                netapp_utils.ems_log_event(event, self.server)
-            else:
-                netapp_utils.ems_log_event_cserver(event, self.server, self.module)
-        except netapp_utils.zapi.NaApiError:
-            pass
 
     def apply(self):
         ''' calls the zapi and returns json output '''

@@ -483,8 +483,6 @@ class NetAppOntapVscanOnAccessPolicy:
                                       (self.parameters['policy_name'], to_native(error)))
 
     def apply(self):
-        if not self.use_rest:
-            netapp_utils.ems_log_event("na_ontap_vscan_on_access_policy", self.server)
         modify_policy_state, modify = None, None
         current = self.get_on_access_policy()
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
@@ -509,7 +507,9 @@ class NetAppOntapVscanOnAccessPolicy:
                 self.delete_on_access_policy()
             if modify:
                 self.modify_on_access_policy(modify)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify,
+                                              extra_responses={'modify_policy_state': modify_policy_state})
+        self.module.exit_json(**result)
 
 
 def main():

@@ -430,14 +430,13 @@ reminder,max-http-size,max-smtp-size,remove-private-data,ondemand-server-url,sup
         """
         Apply action to autosupport
         """
-        if not self.use_rest:
-            netapp_utils.ems_log_event_cserver("na_ontap_autosupport", self.server, self.module)
         current = self.get_autosupport_config()
         modify = self.na_helper.get_modified_attributes(current, self.parameters)
         sanitized_modify = self.idempotency_check(current, modify)
         if self.na_helper.changed and not self.module.check_mode:
             self.modify_autosupport_config(modify)
-        self.module.exit_json(changed=self.na_helper.changed, modify=sanitized_modify, current=current)
+        result = netapp_utils.generate_result(self.na_helper.changed, modify=sanitized_modify)
+        self.module.exit_json(**result)
 
 
 def main():

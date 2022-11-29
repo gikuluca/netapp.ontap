@@ -172,6 +172,7 @@ class NetAppOntapFilePolicy(object):
         # set up variables
         self.na_helper = NetAppModule()
         self.parameters = self.na_helper.set_parameters(self.module.params)
+        self.na_helper.module_deprecated(self.module)
 
         if HAS_NETAPP_LIB is False:
             self.module.fail_json(msg='The python NetApp-Lib module is required')
@@ -313,7 +314,6 @@ class NetAppOntapFilePolicy(object):
                                   exception=traceback.format_exc())
 
     def apply(self):
-        netapp_utils.ems_log_event("na_ontap_file_directory_policy", self.server)
         current = self.get_policy_iter()
         cd_action, task_cd_action, task_modify = None, None, None
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
@@ -345,7 +345,9 @@ class NetAppOntapFilePolicy(object):
                         self.set_sd()
                     elif cd_action == 'delete':
                         self.remove_policy()
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, extra_responses={'task action': task_cd_action,
+                                                                                                  'task modify': task_modify})
+        self.module.exit_json(**result)
 
 
 def main():

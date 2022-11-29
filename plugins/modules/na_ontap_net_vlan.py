@@ -335,8 +335,6 @@ class NetAppOntapVlan:
         :return:
         """
         modify = None
-        if not self.use_rest:
-            netapp_utils.ems_log_event_cserver("na_ontap_net_vlan", self.server, self.module)
         current = self.get_vlan()
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
         if self.use_rest and cd_action is None:
@@ -353,7 +351,8 @@ class NetAppOntapVlan:
                 self.delete_vlan(current)
             if modify:
                 self.modify_vlan(current, modify)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

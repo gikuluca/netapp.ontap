@@ -174,7 +174,7 @@ class NetAppONTAPSSHCommand(object):
         # ONTAP makes copious use of \r
         out_string = out_string.replace(b'\r\r\n', b'\n')
         out_string = out_string.replace(b'\r\n', b'\n')
-        return(out_string)
+        return out_string
 
     def run_ssh_command(self, command):
         ''' calls SSH '''
@@ -220,7 +220,6 @@ class NetAppONTAPSSHCommand(object):
 
     def run_command(self):
         ''' calls SSH '''
-        # self.ems()
         command = self.command
         if self.privilege is not None:
             if self.service_processor:

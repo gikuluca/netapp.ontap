@@ -77,8 +77,9 @@ def test_record_rest_request():
     params = 'PARAMS'
     json = {'record': {'key': 'value'}}
     headers = {}
+    files = {'data': 'value'}
     calls = uut.MockCalls(function_name)
-    calls._record_rest_request(method, api, params, json, headers)
+    calls._record_rest_request(method, api, params, json, headers, files)
     uut.print_requests(function_name)
     assert len([calls.get_requests(method, api)]) == 1
     assert calls.is_record_in_json({'record': {'key': 'value'}}, 'METHOD', 'API')
@@ -153,12 +154,12 @@ def test_fixture(patch_fixture):
     mock_sr, mock_invoke = patch_fixture
     cx = netapp_utils.OntapZAPICx()
     cx.invoke_elem(netapp_utils.zapi.NaElement.create_node_with_children('get-version'))
-    assert('test_fixture') in uut._RESPONSES
-    assert('test_fixture') in uut._REQUESTS
+    assert 'test_fixture' in uut._RESPONSES
+    assert 'test_fixture' in uut._REQUESTS
     uut.print_requests()
     uut.print_requests_and_responses()
-    assert(len(mock_sr.mock_calls) == 0)
-    assert(len(mock_invoke.mock_calls) == 1)
+    assert len(mock_sr.mock_calls) == 0
+    assert len(mock_invoke.mock_calls) == 1
     calls = uut.get_mock_record()
     assert len([calls.get_requests()]) == 1
 
@@ -168,7 +169,7 @@ def test_fixture_exit_unregistered(patch_fixture):
     with pytest.raises(AssertionError) as exc:
         uut._patch_request_and_invoke_exit_checks('test_fixture_exit_unregistered')
     msg = 'Error: responses for ZAPI invoke or REST send requests are not registered.'
-    assert msg == exc.value.args[0]
+    assert msg in exc.value.args[0]
     uut.FORCE_REGISTRATION = False
 
 
@@ -180,7 +181,7 @@ def test_fixture_exit_unused_response(patch_fixture):
     with pytest.raises(AssertionError) as exc:
         uut._patch_request_and_invoke_exit_checks('test_fixture_exit_unused_response')
     msg = 'Error: not all responses were processed.  Use -s to see detailed error.  Ignore this error if there is an earlier error in the test.'
-    assert msg == exc.value.args[0]
+    assert msg in exc.value.args[0]
     # consume the response
     cx = netapp_utils.OntapZAPICx()
     cx.invoke_elem(netapp_utils.zapi.NaElement.create_node_with_children('get-version'))

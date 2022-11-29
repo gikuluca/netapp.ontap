@@ -320,8 +320,6 @@ class NetAppOntapObjectStoreConfig():
         :return: None
         """
         modify = None
-        if not self.use_rest:
-            netapp_utils.ems_log_event_cserver("na_ontap_object_store_config", self.server, self.module)
         current = self.get_aggr_object_store()
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
         if cd_action is None:
@@ -345,7 +343,8 @@ class NetAppOntapObjectStoreConfig():
                 self.delete_aggr_object_store(uuid)
             elif modify:
                 self.modify_aggr_object_store(body, uuid)
-        self.module.exit_json(changed=self.na_helper.changed, modify=modify)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

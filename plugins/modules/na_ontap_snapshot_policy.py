@@ -62,7 +62,7 @@ options:
     type: list
     elements: str
     required: false
-    version_added: '19.10.1'
+    version_added: '19.11.0'
   snapmirror_label:
     description:
     - SnapMirror label assigned to each schedule inside the policy. Use an empty
@@ -707,8 +707,6 @@ class NetAppOntapSnapshotPolicy(object):
         """
         Check to see which play we should run
         """
-        if not self.use_rest:
-            self.asup_log_for_cserver("na_ontap_snapshot_policy")
         current = self.get_snapshot_policy_rest()
         modify = None
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
@@ -728,7 +726,8 @@ class NetAppOntapSnapshotPolicy(object):
             if modify:
                 self.modify_snapshot_policy_rest(modify, current)
                 self.modify_snapshot_policy_schedule_rest(modify, current)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

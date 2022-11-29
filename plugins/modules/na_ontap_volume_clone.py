@@ -320,8 +320,6 @@ class NetAppONTAPVolumeClone:
         """
         Run Module based on playbook
         """
-        if not self.use_rest:
-            netapp_utils.ems_log_event("na_ontap_volume_clone", self.vserver)
         current = self.get_volume_clone()
         if self.use_rest and current:
             self.uuid = current['uuid']
@@ -341,7 +339,8 @@ class NetAppONTAPVolumeClone:
                     self.modify_volume_clone()
             if modify:
                 self.modify_volume_clone()
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():

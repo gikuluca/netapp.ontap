@@ -55,12 +55,13 @@ def create_restapi_object(default_args):
 
 
 class mockResponse:
-    def __init__(self, json_data, status_code, raise_action=None, headers=None):
+    def __init__(self, json_data, status_code, raise_action=None, headers=None, text=None):
         self.json_data = json_data
         self.status_code = status_code
         self.content = json_data
         self.raise_action = raise_action
-        self.headers = headers or []
+        self.headers = headers or {}
+        self.text = text
 
     def raise_for_status(self):
         if self.status_code >= 400 and self.status_code < 600:
@@ -129,8 +130,9 @@ def test_wait_on_job_job_error(mock_request, sleep_mock):
     assert msg in error
 
 
+@patch('time.sleep')
 @patch('requests.request')
-def test_wait_on_job_job_failure(mock_request):
+def test_wait_on_job_job_failure(mock_request, dont_sleep):
     ''' get with no data '''
     mock_request.return_value = mockResponse(json_data=dict(error='Job error message', state='failure', message='failure message'), status_code=200)
     rest_api = create_restapi_object(DEFAULT_ARGS)
@@ -156,8 +158,9 @@ def test_wait_on_job_timeout_running(mock_request, sleep_mock):
     assert message == 'any message'
 
 
+@patch('time.sleep')
 @patch('requests.request')
-def test_wait_on_job(mock_request):
+def test_wait_on_job(mock_request, dont_sleep):
     ''' get with no data '''
     mock_request.return_value = mockResponse(json_data=dict(error='Job error message', state='other', message='any message'), status_code=200)
     rest_api = create_restapi_object(DEFAULT_ARGS)
@@ -248,9 +251,21 @@ def test_connection_error(mock_request):
 @patch('requests.request')
 def test_options_allow_in_header(mock_request):
     ''' OPTIONS returns Allow key '''
-    mock_request.return_value = mockResponse(json_data={}, headers={'Allow': 'alllowed'}, status_code=200)
+    mock_request.return_value = mockResponse(json_data={}, headers={'Allow': 'allowed'}, status_code=200)
     rest_api = create_restapi_object(DEFAULT_ARGS)
     api = 'api/testme'
     message, error = rest_api.options(api)
     assert error is None
-    assert message == {'Allow': 'alllowed'}
+    assert message == {'Allow': 'allowed'}
+
+
+@patch('requests.request')
+def test_formdata_in_response(mock_request):
+    ''' GET return formdata '''
+    mock_request.return_value = mockResponse(
+        json_data={}, headers={'Content-Type': 'multipart/form-data'}, raise_action='bad_json', status_code=200, text='testme')
+    rest_api = create_restapi_object(DEFAULT_ARGS)
+    api = 'api/testme'
+    message, error = rest_api.get(api)
+    assert error is None
+    assert message == {'text': 'testme'}

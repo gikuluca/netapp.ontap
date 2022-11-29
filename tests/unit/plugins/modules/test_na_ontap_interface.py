@@ -19,7 +19,7 @@ from ansible_collections.netapp.ontap.tests.unit.framework.mock_rest_and_zapi_re
 from ansible_collections.netapp.ontap.tests.unit.framework.rest_factory import rest_error_message, rest_responses
 from ansible_collections.netapp.ontap.tests.unit.framework.zapi_factory import build_zapi_error, build_zapi_response, zapi_responses
 from ansible_collections.netapp.ontap.plugins.modules.na_ontap_interface \
-    import NetAppOntapInterface as interface_module, netmask_length_to_netmask, netmask_to_netmask_length, main as my_main
+    import NetAppOntapInterface as interface_module, main as my_main
 
 
 if not netapp_utils.HAS_REQUESTS and sys.version_info < (2, 7):
@@ -30,7 +30,7 @@ if not netapp_utils.has_netapp_lib():
     pytestmark = pytest.mark.skip('skipping as missing required netapp_lib')
 
 
-def interface_info(dns=True):
+def interface_info(dns=True, address='2.2.2.2', netmask='1.1.1.1'):
     info = {
         'attributes-list': {
             'net-interface-info': {
@@ -44,8 +44,8 @@ def interface_info(dns=True):
                 'current-node': 'node',
                 'home-port': 'e0c',
                 'current-port': 'e0c',
-                'address': '2.2.2.2',
-                'netmask': '1.1.1.1',
+                'address': address,
+                'netmask': netmask,
                 'role': 'data',
                 'listen-for-dns-query': 'true',
                 'is-dns-update-enabled': 'true',
@@ -55,7 +55,7 @@ def interface_info(dns=True):
         }
     }
     if dns:
-        info['attributes-list']['dns-domain-name'] = 'test.com'
+        info['attributes-list']['net-interface-info']['dns-domain-name'] = 'test.com'
     return info
 
 
@@ -70,6 +70,7 @@ node_info = {
 
 ZRR = zapi_responses({
     'interface_info': build_zapi_response(interface_info(), 1),
+    'interface_ipv4': build_zapi_response(interface_info(address='10.10.10.13', netmask='255.255.255.0'), 1),
     'interface_info_no_dns': build_zapi_response(interface_info(dns=False), 1),
     'node_info': build_zapi_response(node_info, 1),
     'error_17': build_zapi_error(17, 'A LIF with the same name already exists'),
@@ -100,8 +101,6 @@ def test_module_fail_when_required_args_missing():
 def test_create_error_missing_param():
     ''' Test successful create '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
     ])
     module_args = {
@@ -118,10 +117,8 @@ def test_create_error_missing_param():
 def test_successful_create():
     ''' Test successful create '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
-        ('ZAPI', 'net-interface-create', ZRR['success']),
+        ('ZAPI', 'net-interface-create', ZRR['success'])
     ])
     module_args = {
         'use_rest': 'never',
@@ -129,8 +126,8 @@ def test_successful_create():
         'home_node': 'node',
         'role': 'data',
         # 'subnet_name': 'subnet_name',
-        'address': 'address',
-        'netmask': 'netmask',
+        'address': '10.10.10.13',
+        'netmask': '255.255.255.0',
         'failover_policy': 'system-defined',
         'failover_group': 'failover_group',
         'firewall_policy': 'firewall_policy',
@@ -146,11 +143,28 @@ def test_successful_create():
     assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
 
 
+def test_modify_ip_subnet_cidr_mask():
+    ''' Test successful modify ip/subnet mask '''
+    register_responses([
+        ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
+        ('ZAPI', 'net-interface-modify', ZRR['success']),
+        ('ZAPI', 'net-interface-get-iter', ZRR['interface_ipv4']),
+    ])
+    module_args = {
+        'use_rest': 'never',
+        'vserver': 'vserver',
+        'home_node': 'node',
+        'role': 'data',
+        'address': '10.10.10.13',
+        'netmask': '24'
+    }
+    assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
+    assert not call_main(my_main, DEFAULT_ARGS, module_args)['changed']
+
+
 def test_successful_create_for_NVMe():
     ''' Test successful create for NVMe protocol'''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
         ('ZAPI', 'cluster-node-get-iter', ZRR['node_info']),
         ('ZAPI', 'net-interface-create', ZRR['success']),
@@ -169,8 +183,6 @@ def test_successful_create_for_NVMe():
 def test_create_idempotency_for_NVMe():
     ''' Test successful create for NVMe protocol'''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
     ])
     module_args = {
@@ -186,8 +198,6 @@ def test_create_idempotency_for_NVMe():
 def test_create_error_for_NVMe():
     ''' Test if create throws an error if required param 'protocols' uses NVMe'''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
     ])
     msg = 'Error: Following parameters for creating interface are not supported for data-protocol fc-nvme:'
@@ -206,7 +216,6 @@ def test_create_error_for_NVMe():
 def test_create_idempotency():
     ''' Test create idempotency, and ignore EMS logging error '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['error']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
     ])
     module_args = {
@@ -219,8 +228,6 @@ def test_create_idempotency():
 def test_successful_delete():
     ''' Test delete existing interface, and ignore EMS logging error '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['error']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info_no_dns']),
         ('ZAPI', 'net-interface-modify', ZRR['success']),               # offline
         ('ZAPI', 'net-interface-delete', ZRR['success']),
@@ -236,8 +243,6 @@ def test_successful_delete():
 def test_delete_idempotency():
     ''' Test delete idempotency '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
     ])
     module_args = {
@@ -251,8 +256,6 @@ def test_delete_idempotency():
 def test_successful_modify():
     ''' Test successful modify interface_minutes '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-modify', ZRR['success']),
     ])
@@ -271,8 +274,6 @@ def test_successful_modify():
 def test_modify_idempotency():
     ''' Test modify idempotency '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
     ])
     module_args = {
@@ -285,54 +286,38 @@ def test_modify_idempotency():
 def test_error_message():
     register_responses([
         # create, missing params
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
         ('ZAPI', 'cluster-node-get-iter', ZRR['no_records']),
 
         # create - get home_node error
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
         ('ZAPI', 'cluster-node-get-iter', ZRR['error']),
 
         # create error
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
         ('ZAPI', 'cluster-node-get-iter', ZRR['error_13003']),
         ('ZAPI', 'net-interface-create', ZRR['error']),
 
         # create error
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
         ('ZAPI', 'cluster-node-get-iter', ZRR['no_records']),
         ('ZAPI', 'net-interface-create', ZRR['error_17']),
 
         # modify error
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-modify', ZRR['error']),
 
         # rename error
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-rename', ZRR['error']),
 
         # delete error
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-modify', ZRR['success']),
         ('ZAPI', 'net-interface-delete', ZRR['error']),
 
         # get error
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['error']),
     ])
     module_args = {
@@ -367,8 +352,6 @@ def test_error_message():
 def test_successful_rename():
     ''' Test successful '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-rename', ZRR['success']),
@@ -389,8 +372,6 @@ def test_successful_rename():
 def test_negative_rename_not_found():
     ''' Test from interface not found '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
         ('ZAPI', 'net-interface-get-iter', ZRR['no_records']),
     ])
@@ -410,8 +391,6 @@ def test_negative_rename_not_found():
 def test_successful_migrate():
     ''' Test successful '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-modify', ZRR['success']),
         ('ZAPI', 'net-interface-migrate', ZRR['success']),
@@ -431,21 +410,15 @@ def test_successful_migrate():
 def test_negative_migrate():
     ''' Test successful '''
     register_responses([
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-modify', ZRR['success']),
 
         # 2nd try
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-modify', ZRR['success']),
         ('ZAPI', 'net-interface-migrate', ZRR['error']),
 
         # 3rd try
-        ('ZAPI', 'vserver-get-iter', ZRR['no_records']),
-        ('ZAPI', 'ems-autosupport-log', ZRR['success']),
         ('ZAPI', 'net-interface-get-iter', ZRR['interface_info']),
         ('ZAPI', 'net-interface-modify', ZRR['success']),
         ('ZAPI', 'net-interface-migrate', ZRR['success']),
@@ -479,9 +452,11 @@ SRR = rest_responses({
         'name': 'abc_if',
         'uuid': '54321',
         'svm': {'name': 'vserver', 'uuid': 'svm_uuid'},
+        'dns_zone': 'netapp.com',
+        'ddns_enabled': True,
         'data_protocol': ['nfs'],
         'enabled': True,
-        'ip': {'address': '10.11.12.13', 'netmask': '255.192.0.0'},
+        'ip': {'address': '10.11.12.13', 'netmask': '10'},
         'location': {
             'home_port': {'name': 'e0c'},
             'home_node': {'name': 'node2'},
@@ -490,7 +465,8 @@ SRR = rest_responses({
             'auto_revert': True,
             'failover': True
         },
-        'service_policy': {'name': 'data-mgmt'}
+        'service_policy': {'name': 'data-mgmt'},
+        'probe_port': 65431
     }]}, None),
     'two_records': (200, {'records': [{'name': 'node2_abc_if'}, {'name': 'node2_abc_if'}]}, None),
     'error_precluster': (500, None, {'message': 'are available in precluster.'}),
@@ -559,7 +535,7 @@ def test_rest_create_ip_with_svm():
     ''' create cluster '''
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97']),
-        ('GET', 'network/ip/interfaces', SRR['zero_records']),       # get IP
+        ('GET', 'network/ip/interfaces', SRR['zero_records']),      # get IP
         ('GET', 'cluster/nodes', SRR['nodes']),                     # get nodes
         ('POST', 'network/ip/interfaces', SRR['success']),          # post
     ])
@@ -573,11 +549,48 @@ def test_rest_create_ip_with_svm():
     assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
 
 
+def test_rest_create_fc_with_svm():
+    ''' create FC interface '''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_9_8_0']),
+        ('GET', 'network/fc/interfaces', SRR['zero_records']),      # get FC
+        ('POST', 'network/fc/interfaces', SRR['success']),          # post
+    ])
+    module_args = {
+        'use_rest': 'always',
+        'vserver': 'vserver',
+        'data_protocol': 'fc_nvme',
+        'home_node': 'my_node',
+        'protocols': 'fc-nvme'
+    }
+    assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
+
+
+def test_rest_create_fc_with_svm_no_home_port():
+    ''' create FC interface '''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_97']),
+        ('GET', 'network/fc/interfaces', SRR['zero_records']),      # get FC
+        ('GET', 'cluster/nodes', SRR['nodes']),                     # get nodes
+        ('POST', 'network/fc/interfaces', SRR['success']),          # post
+    ])
+    args = dict(DEFAULT_ARGS)
+    module_args = {
+        'use_rest': 'always',
+        'vserver': 'vserver',
+        'data_protocol': 'fc_nvme',
+        'protocols': 'fc-nvme',
+        'current_port': args.pop('home_port'),
+        'current_node': 'my_node',
+    }
+    assert call_main(my_main, args, module_args)['changed']
+
+
 @patch('time.sleep')
 def test_rest_create_ip_with_cluster_svm(dont_sleep):
     ''' create cluster '''
     register_responses([
-        ('GET', 'cluster', SRR['is_rest_97']),
+        ('GET', 'cluster', SRR['is_rest_9_10_1']),
         ('GET', 'network/ip/interfaces', SRR['zero_records']),                  # get IP
         ('GET', 'cluster/nodes', SRR['nodes']),                                 # get nodes
         ('POST', 'network/ip/interfaces', SRR['one_record_vserver']),           # post
@@ -593,7 +606,8 @@ def test_rest_create_ip_with_cluster_svm(dont_sleep):
         'vserver': 'vserver',
         'address': '10.12.12.13',
         'netmask': '255.255.192.0',
-        'role': 'intercluster'
+        'role': 'intercluster',
+        'probe_port': 65431,
     }
     assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
     print_warnings()
@@ -617,12 +631,30 @@ def test_rest_negative_create_ip():
     assert msg in call_main(my_main, DEFAULT_ARGS, module_args, fail=True)['msg']
 
 
+def test_rest_negative_create_ip_with_svm_no_home_port():
+    ''' create FC interface '''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_97']),
+        ('GET', 'network/ip/interfaces', SRR['zero_records']),      # get IP
+        ('GET', 'cluster/nodes', SRR['nodes']),                     # get nodes
+        # ('POST', 'network/fc/interfaces', SRR['success']),          # post
+    ])
+    args = dict(DEFAULT_ARGS)
+    args.pop('home_port')
+    module_args = {
+        'use_rest': 'always',
+        'vserver': 'vserver',
+        'interface_type': 'ip',
+    }
+    error = "Error: At least one of 'broadcast_domain', 'home_port', 'home_node' is required to create an IP interface."
+    assert error in call_main(my_main, args, module_args, fail=True)['msg']
+
+
 def test_rest_negative_create_no_ip_address():
     ''' create cluster '''
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97']),
         ('GET', 'network/ip/interfaces', SRR['zero_records']),    # get IP
-        ('GET', 'network/fc/interfaces', SRR['zero_records']),    # get FC
         ('GET', 'cluster/nodes', SRR['nodes']),     # get nodes
     ])
     msg = 'Error: Missing one or more required parameters for creating interface: interface_type.'
@@ -633,12 +665,25 @@ def test_rest_negative_create_no_ip_address():
     assert msg in call_main(my_main, DEFAULT_ARGS, module_args, fail=True)['msg']
 
 
+def test_rest_get_fc_no_svm():
+    ''' create cluster '''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_97']),
+        ('GET', 'cluster/nodes', SRR['nodes']),     # get nodes
+    ])
+    module_args = {
+        'use_rest': 'always',
+        'interface_type': 'fc',
+    }
+    msg = "A data 'vserver' is required for FC interfaces."
+    assert msg in call_main(my_main, DEFAULT_ARGS, module_args, fail=True)['msg']
+
+
 def test_rest_negative_get_multiple_ip_if():
     ''' create cluster '''
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97']),
         ('GET', 'network/ip/interfaces', SRR['two_records']),       # get IP
-        ('GET', 'network/fc/interfaces', SRR['zero_records']),      # get FC
         ('GET', 'cluster/nodes', SRR['nodes']),                     # get nodes
     ])
     msg = 'Error: multiple records for: node2_abc_if'
@@ -655,12 +700,11 @@ def test_rest_negative_get_multiple_fc_if():
         ('GET', 'cluster', SRR['is_rest_97']),
         ('GET', 'network/ip/interfaces', SRR['zero_records']),  # get IP
         ('GET', 'network/fc/interfaces', SRR['two_records']),   # get FC
-        ('GET', 'cluster/nodes', SRR['nodes']),                 # get nodes
     ])
-    msg = 'Error: multiple records for: node2_abc_if'
+    msg = 'Error: unexpected records for name: abc_if, vserver: not_cluster'
     module_args = {
         'use_rest': 'always',
-        'ipspace': 'cluster',
+        'vserver': 'not_cluster',
     }
     assert msg in call_main(my_main, DEFAULT_ARGS, module_args, fail=True)['msg']
 
@@ -669,13 +713,13 @@ def test_rest_negative_get_multiple_ip_fc_if():
     ''' create cluster '''
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97']),
-        ('GET', 'network/ip/interfaces', SRR['two_records']),   # get IP
-        ('GET', 'network/fc/interfaces', SRR['two_records']),   # get FC
+        ('GET', 'network/ip/interfaces', SRR['one_record_vserver']),        # get IP
+        ('GET', 'network/fc/interfaces', SRR['one_record_vserver']),        # get FC
     ])
     msg = 'Error fetching interface abc_if - found duplicate entries, please indicate interface_type.'
     module_args = {
         'use_rest': 'always',
-        'ipspace': 'cluster',
+        'vserver': 'not_cluster',
     }
     assert msg in call_main(my_main, DEFAULT_ARGS, module_args, fail=True)['msg']
 
@@ -921,6 +965,26 @@ def test_rest_delete_ip_no_svm():
     assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
 
 
+def test_rest_disable_delete_fc():
+    ''' create cluster '''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_97']),
+        ('GET', 'network/fc/interfaces', SRR['one_record_vserver']),    # get IP
+        ('PATCH', 'network/fc/interfaces/54321', SRR['success']),       # disable fc before delete
+        ('DELETE', 'network/fc/interfaces/54321', SRR['success']),      # delete
+    ])
+    module_args = {
+        'use_rest': 'always',
+        'state': 'absent',
+        "admin_status": "up",
+        "protocols": "fc-nvme",
+        "role": "data",
+        "vserver": "svm3",
+        "current_port": "1a"
+    }
+    assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
+
+
 def test_rest_delete_idempotent_ip_no_svm():
     ''' create cluster '''
     register_responses([
@@ -935,16 +999,6 @@ def test_rest_delete_idempotent_ip_no_svm():
         'state': 'absent',
     }
     assert not call_main(my_main, DEFAULT_ARGS, module_args)['changed']
-
-
-def test_netmask_to_len():
-    # note the address has host bits set
-    assert netmask_to_netmask_length('10.10.10.10', '255.255.0.0') == '16'
-
-
-def test_len_to_netmask():
-    # note the address has host bits set
-    assert netmask_length_to_netmask('10.10.10.10', '16') == '255.255.0.0'
 
 
 def test_derive_fc_protocol_fcp():
@@ -1083,7 +1137,7 @@ def test_negative_derive_interface_type_unknown():
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97']),
     ])
-    msg = "Error: Unexpected value(s) for protocols: ['unexpected']"
+    msg = "Error: unable to determine interface type, please set interface_type: unexpected value(s) for protocols: ['unexpected']"
     module_args = {
         'use_rest': 'always',
         'protocols': ['unexpected'],
@@ -1096,7 +1150,7 @@ def test_negative_derive_interface_type_multiple():
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97']),
     ])
-    msg = "Error: Incompatible value(s) for protocols: ['fc-nvme', 'cifs']"
+    msg = "Error: unable to determine interface type, please set interface_type: incompatible value(s) for protocols: ['fc-nvme', 'cifs']"
     module_args = {
         'use_rest': 'always',
         'protocols': ['fc-nvme', 'cifs'],
@@ -1108,13 +1162,36 @@ def test_negative_derive_interface_type_multiple():
 def test_derive_block_file_type_fcp():
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97']),
+        ('GET', 'cluster', SRR['is_rest_97']),
     ])
     module_args = {
         'use_rest': 'always',
     }
     my_obj = create_module(interface_module, DEFAULT_ARGS, module_args)
-    block_p, file_p = my_obj.derive_block_file_type(['fcp'])
-    assert block_p, not file_p
+    block_p, file_p, fcp = my_obj.derive_block_file_type(['fcp'])
+    assert block_p
+    assert not file_p
+    assert fcp
+    module_args['interface_type'] = 'fc'
+    my_obj = create_module(interface_module, DEFAULT_ARGS, module_args)
+    block_p, file_p, fcp = my_obj.derive_block_file_type(None)
+    assert block_p
+    assert not file_p
+    assert fcp
+
+
+def test_derive_block_file_type_iscsi():
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_97']),
+    ])
+    module_args = {
+        'use_rest': 'always',
+    }
+    my_obj = create_module(interface_module, DEFAULT_ARGS, module_args)
+    block_p, file_p, fcp = my_obj.derive_block_file_type(['iscsi'])
+    assert block_p
+    assert not file_p
+    assert not fcp
 
 
 def test_derive_block_file_type_cifs():
@@ -1125,8 +1202,10 @@ def test_derive_block_file_type_cifs():
         'use_rest': 'always',
     }
     my_obj = create_module(interface_module, DEFAULT_ARGS, module_args)
-    block_p, file_p = my_obj.derive_block_file_type(['cifs'])
-    assert not block_p, file_p
+    block_p, file_p, fcp = my_obj.derive_block_file_type(['cifs'])
+    assert not block_p
+    assert file_p
+    assert not fcp
 
 
 def test_derive_block_file_type_mixed():
@@ -1163,6 +1242,19 @@ def test_rest_negative_unsupported_zapi_option_fail():
         'use_rest': 'always',
         'ipspace': 'cluster',
         'is_ipv4_link_local': True,
+    }
+    assert msg in create_module(interface_module, DEFAULT_ARGS, module_args, fail=True)['msg']
+
+
+def test_rest_negative_rest_only_option():
+    ''' create cluster '''
+    register_responses([
+    ])
+    msg = "probe_port requires REST."
+    module_args = {
+        'use_rest': 'never',
+        'ipspace': 'cluster',
+        'probe_port': 65431,
     }
     assert msg in create_module(interface_module, DEFAULT_ARGS, module_args, fail=True)['msg']
 
@@ -1219,29 +1311,6 @@ def test_rest_auto_falls_back_to_zapi_if_ip_9_6():
     assert_warning_was_raised('Falling back to ZAPI: REST requires ONTAP 9.7 or later for interface APIs.')
 
 
-@patch('ansible_collections.netapp.ontap.plugins.modules.na_ontap_interface.HAS_IPADDRESS_LIB', False)
-def test_rest_auto_falls_back_to_zapi_if_ip_address_library_is_missing():
-    register_responses([
-        ('GET', 'cluster', SRR['is_rest_97'])
-    ])
-    module_args = {'use_rest': 'auto'}
-    # vserver is a required parameter with ZAPI
-    msg = "missing required argument with ZAPI: vserver"
-    assert msg in create_module(interface_module, DEFAULT_ARGS, module_args, fail=True)['msg']
-    print_warnings
-    assert_warning_was_raised('Falling back to ZAPI: the python ipaddress package is required for this module: None')
-
-
-@patch('ansible_collections.netapp.ontap.plugins.modules.na_ontap_interface.HAS_IPADDRESS_LIB', False)
-def test_rest_always_fail_if_ip_address_library_is_missing():
-    register_responses([
-        ('GET', 'cluster', SRR['is_rest_97'])
-    ])
-    module_args = {'use_rest': 'always'}
-    error = create_module(interface_module, DEFAULT_ARGS, module_args, fail=True)['msg']
-    assert error == 'Error: the python ipaddress package is required for this module: None'
-
-
 def test_fix_errors():
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97'])
@@ -1258,6 +1327,7 @@ def test_fix_errors():
         ('data', 'data', ['nfs'], None, 'default-data-files', True),
         ('data', 'data', ['cifs'], None, 'default-data-files', True),
         ('data', 'data', ['iscsi'], None, 'default-data-blocks', True),
+        ('data', '', ['fc-nvme'], None, 'unchanged', True),
         ('data', 'mgmt', ['ignored'], None, 'default-management', True),
         ('data', '', ['nfs'], None, 'default-data-files', True),
         ('data', '', ['cifs'], None, 'default-data-files', True),
@@ -1289,17 +1359,18 @@ def test_fix_errors():
 def test_error_messages_get_interface_rest():
     register_responses([
         ('GET', 'cluster', SRR['is_rest_97']),
-        ('GET', 'network/ip/interfaces', SRR['generic_error']),         # get IP
-        ('GET', 'network/fc/interfaces', SRR['two_records']),           # get FC
+        ('GET', 'network/ip/interfaces', SRR['two_records']),           # get IP
         ('GET', 'cluster/nodes', SRR['generic_error']),                 # get nodes
         # second call
-        ('GET', 'network/ip/interfaces', SRR['two_records']),           # get IP
+        ('GET', 'network/ip/interfaces', SRR['one_record_vserver']),    # get IP
         ('GET', 'network/fc/interfaces', SRR['generic_error']),         # get FC
-        ('GET', 'cluster/nodes', SRR['generic_error']),                 # get nodes
         # third call
+        ('GET', 'network/ip/interfaces', SRR['generic_error']),    # get IP
+        ('GET', 'network/fc/interfaces', SRR['one_record_vserver']),         # get FC
+        # fourth call
         ('GET', 'network/ip/interfaces', SRR['generic_error']),         # get IP
         ('GET', 'network/fc/interfaces', SRR['generic_error']),         # get FC
-        # fourth call
+        # fifth call
         ('GET', 'network/ip/interfaces', SRR['error_precluster']),      # get IP
     ])
     module_args = {'use_rest': 'auto'}
@@ -1308,15 +1379,22 @@ def test_error_messages_get_interface_rest():
     error = 'Error fetching cluster node info'
     assert expect_and_capture_ansible_exception(my_obj.get_interface_rest, 'fail', 'my_lif')['msg'] == rest_error_message(error, 'cluster/nodes')
     # second call
-    # reset value, as it was set for fc
+    # reset value, as it was set for ip
     del my_obj.parameters['interface_type']
-    assert expect_and_capture_ansible_exception(my_obj.get_interface_rest, 'fail', 'my_lif')['msg'] == rest_error_message(error, 'cluster/nodes')
+    my_obj.parameters['vserver'] = 'not_cluster'
+    assert my_obj.get_interface_rest('my_lif') is not None
     # third call
+    # reset value, as it was set for ip
+    del my_obj.parameters['interface_type']
+    my_obj.parameters['vserver'] = 'not_cluster'
+    assert my_obj.get_interface_rest('my_lif') is not None
+    # fourth call
+    # reset value, as it was set for fc
     del my_obj.parameters['interface_type']
     error = expect_and_capture_ansible_exception(my_obj.get_interface_rest, 'fail', 'my_lif')['msg']
     assert rest_error_message('Error fetching interface details for my_lif', 'network/ip/interfaces') in error
     assert rest_error_message('', 'network/fc/interfaces') in error
-    # fourth call
+    # fifth call
     error = 'This module cannot use REST in precluster mode, ZAPI can be forced with use_rest: never.'
     assert error in expect_and_capture_ansible_exception(my_obj.get_interface_rest, 'fail', 'my_lif')['msg']
 
@@ -1342,7 +1420,7 @@ def test_error_messages_rest_find_interface():
     # multiple records with vserver
     records = [1, 2]
     my_obj.parameters['vserver'] = 'vserver'
-    error = 'Error: unexpected records for name: name, vserser: vserver - [1, 2]'
+    error = 'Error: unexpected records for name: name, vserver: vserver - [1, 2]'
     assert error in expect_and_capture_ansible_exception(my_obj.find_exact_match, 'fail', records, 'name')['msg']
     # multiple records with ambiguity, home_node set (warn)
     del my_obj.parameters['vserver']
@@ -1413,29 +1491,91 @@ def test_error_messages_build_rest_body_and_validations():
     my_obj.parameters['home_node'] = 'node1'
     my_obj.parameters['protocols'] = ['nfs']
     my_obj.parameters['role'] = 'intercluster'
+    error = 'Error: Missing one or more required parameters for creating interface: interface_type.'
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
     my_obj.parameters['interface_type'] = 'type'
+    error = 'Error: unexpected value for interface_type: type.'
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
+    my_obj.parameters['interface_type'] = 'ip'
+    my_obj.parameters['ipspace'] = 'ipspace'
     error = 'Error: Protocol cannot be specified for intercluster role, failed to create interface.'
     assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
     del my_obj.parameters['protocols']
-    error = 'Error: unexpected value for interface_type: type.'
-    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
     my_obj.parameters['interface_type'] = 'fc'
-    error = 'Error: ipspace name must be provided if scope is cluster, or vserver for svm scope.'
-    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
-    my_obj.parameters['ipspace'] = 'ipspace'
-    my_obj.parameters['data_protocol'] = 'fc'
-    # my_obj.parameters['address'] = 'address'
-    # my_obj.parameters['netmask'] = 'netmask'
-    my_obj.parameters['force_subnet_association'] = True
-    my_obj.parameters['failover_group'] = 'failover_group'
-    error = "Error creating interface, unsupported options: {'failover_group': 'failover_group'}"
+    error = "Error: 'home_port' is not supported for FC interfaces with 9.7, use 'current_port', avoid home_node."
     assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
     print_warnings()
+    assert_warning_was_raised("Avoid 'home_node' with FC interfaces with 9.7, use 'current_node'.")
+    del my_obj.parameters['home_port']
+    error = "Error: A data 'vserver' is required for FC interfaces."
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
+    my_obj.parameters['current_port'] = '0a'
+    my_obj.parameters['data_protocol'] = 'fc'
+    my_obj.parameters['force_subnet_association'] = True
+    my_obj.parameters['failover_group'] = 'failover_group'
+    my_obj.parameters['vserver'] = 'vserver'
+    error = "Error: 'role' is deprecated, and 'data' is the only value supported for FC interfaces: found intercluster."
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
+    my_obj.parameters['role'] = 'data'
+    error = "Error creating interface, unsupported options: {'failover_group': 'failover_group'}"
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
+    del my_obj.parameters['failover_group']
+    my_obj.parameters['broadcast_domain'] = 'BDD1'
+    error = "Error: broadcast_domain option only supported for IP interfaces: abc_if, interface_type: fc"
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail', None)['msg']
+    my_obj.parameters['service_policy'] = 'svc_pol'
+    error = "Error: 'service_policy' is not supported for FC interfaces."
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail', None)['msg']
+    del my_obj.parameters['service_policy']
+    my_obj.parameters['probe_port'] = 65431
+    error = "Error: 'probe_port' is not supported for FC interfaces."
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail', None)['msg']
+    print_warnings()
     assert_warning_was_raised('Ignoring force_subnet_association')
+    my_obj.parameters['interface_type'] = 'ip'
+    del my_obj.parameters['vserver']
+    del my_obj.parameters['ipspace']
+    error = 'Error: ipspace name must be provided if scope is cluster, or vserver for svm scope.'
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail')['msg']
     modify = {'ipspace': 'ipspace'}
     error = "The following option cannot be modified: ipspace.name"
     assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail', modify)['msg']
     del my_obj.parameters['role']
-    modify = {'ipspace': 'ipspace', 'data_protocol': 'fc'}
-    error = "The following options cannot be modified:"
-    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail', modify)['msg']
+    my_obj.parameters['current_port'] = 'port1'
+    my_obj.parameters['home_port'] = 'port1'
+    my_obj.parameters['ipspace'] = 'ipspace'
+    error = "Error: home_port and broadcast_domain are mutually exclusive for creating: abc_if"
+    assert error in expect_and_capture_ansible_exception(my_obj.build_rest_body, 'fail', None)['msg']
+
+
+def test_dns_domain_ddns_enabled():
+    ''' domain and ddns enabled option test '''
+    register_responses([
+        ('GET', 'cluster', SRR['is_rest_9_9_1']),
+        ('GET', 'network/ip/interfaces', SRR['zero_records']),
+        ('GET', 'cluster/nodes', SRR['nodes']),
+        ('POST', 'network/ip/interfaces', SRR['success']),
+        ('GET', 'cluster', SRR['is_rest_9_9_1']),
+        ('GET', 'network/ip/interfaces', SRR['one_record_vserver']),
+        ('GET', 'cluster/nodes', SRR['nodes']),
+        ('PATCH', 'network/ip/interfaces/54321', SRR['success']),
+        ('GET', 'cluster', SRR['is_rest_9_9_1']),
+        ('GET', 'network/fc/interfaces', SRR['zero_records']),
+        ('GET', 'cluster', SRR['is_rest_9_9_0'])
+    ])
+    module_args = {
+        'use_rest': 'always',
+        'address': '10.11.12.13',
+        'netmask': '255.192.0.0',
+        'vserver': 'vserver',
+        'dns_domain_name': 'netapp1.com',
+        'is_dns_update_enabled': False
+    }
+    assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
+    assert call_main(my_main, DEFAULT_ARGS, module_args)['changed']
+    del module_args['address']
+    del module_args['netmask']
+    args = {'data_protocol': 'fc_nvme', 'home_node': 'my_node', 'protocols': 'fc-nvme', 'interface_type': 'fc'}
+    module_args.update(args)
+    assert 'dns_domain_name, is_dns_update_enabled options only supported for IP interfaces' in call_main(my_main, DEFAULT_ARGS, module_args, fail=True)['msg']
+    assert 'Error: Minimum version of ONTAP for is_dns_update_enabled is (9, 9, 1).' in call_main(my_main, DEFAULT_ARGS, module_args, fail=True)['msg']

@@ -49,10 +49,21 @@ def patch_request_and_invoke(request):
 
 
 def register_responses(responses, function_name=None):
+    ''' When patching, the pytest request identifies the UT test function
+        if the registration is happening in a helper function, function_name needs to identify the calling test function
+        EG:
+        test_me():
+            for x in range:
+                check_something()
+        if the registration happens in check_something, function_name needs to be set to test_me (as a string)
+    '''
     caller = inspect.currentframe().f_back.f_code.co_name
-    if function_name is not None and function_name != caller:
+    if DEBUG:
+        print('register_responses - caller:', caller, 'function_name:', function_name)
+    if function_name is not None and function_name != caller and (caller.startswith('test') or not function_name.startswith('test')):
         raise KeyError('inspect reported a different name: %s, received: %s' % (caller, function_name))
-    function_name = caller
+    if function_name is None:
+        function_name = caller
     fixed_records = []
     for record in responses:
         try:
@@ -168,11 +179,12 @@ class MockCalls:
                 return False
         return True
 
-    def _record_rest_request(self, method, api, params, json, headers):
+    def _record_rest_request(self, method, api, params, json, headers, files):
         record = {
             'params': params,
             'json': json,
-            'headers': headers
+            'headers': headers,
+            'files': files,
         }
         self._record_request(method, api, record)
 
@@ -232,11 +244,11 @@ def _get_or_create_mock_record(function_name):
     return _REQUESTS[function_name]
 
 
-def _mock_netapp_send_request(function_name, method, api, params, json=None, headers=None):
+def _mock_netapp_send_request(function_name, method, api, params, json=None, headers=None, files=None):
     if DEBUG:
         print('Inside _mock_netapp_send_request')
     mock_calls = _get_or_create_mock_record(function_name)
-    mock_calls._record_rest_request(method, api, params, json, headers)
+    mock_calls._record_rest_request(method, api, params, json, headers, files)
     return mock_calls._get_response(method, api)
 
 

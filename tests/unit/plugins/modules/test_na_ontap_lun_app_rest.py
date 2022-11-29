@@ -68,6 +68,34 @@ SRR = {
                            },
                           None
                           ),
+    'get_lun_path': (200,
+                     {'records': [{'uuid': '1234', 'path': '/vol/lun_name/lun_name'}],
+                      'num_records': 1
+                      },
+                     None
+                     ),
+    'one_lun': (200,
+                {'records': [{
+                 'uuid': "1234",
+                 'name': '/vol/lun_name/lun_name',
+                 'path': '/vol/lun_name/lun_name',
+                 'size': 9871360,
+                 'comment': None,
+                 'flexvol_name': None,
+                 'os_type': 'xyz',
+                 'qos_policy_group': None,
+                 'space_reserve': False,
+                 'space_allocation': False
+                 }],
+                 }, None),
+    'get_storage': (200,
+                    {'backing_storage': dict(luns=[{'path': '/vol/lun_name/lun_name',
+                                                    'uuid': '1234',
+                                                    'size': 15728640,
+                                                    'creation_timestamp': '2022-07-26T20:35:50+00:00'
+                                                    }]),
+                     }, None),
+
 }
 
 
@@ -193,7 +221,8 @@ class TestMyModule(unittest.TestCase):
         expected_json = {'name': 'san_appli', 'svm': {'name': 'ansible'}, 'smart_container': True,
                          'san': {'application_components':
                                  [{'name': 'lun_name', 'lun_count': 1, 'total_size': 5368709120, 'tiering': {'control': 'required'}}]}}
-        expected_call = call('POST', 'application/applications', {'return_timeout': 30, 'return_records': 'true'}, json=expected_json, headers=None)
+        expected_call = call(
+            'POST', 'application/applications', {'return_timeout': 30, 'return_records': 'true'}, json=expected_json, headers=None, files=None)
         assert expected_call in mock_request.mock_calls
 
     @patch('ansible_collections.netapp.ontap.plugins.module_utils.netapp.OntapRestAPI.send_request')
@@ -283,11 +312,16 @@ class TestMyModule(unittest.TestCase):
             SRR['get_app_details'],                 # GET application/applications/<uuid>
             SRR['get_apps_found'],                  # GET application/applications/<uuid>/components
             SRR['get_app_component_details'],       # GET application/applications/<uuid>/components/<cuuid>
-            SRR['empty_good'],                      # PATCH application/applications/<uuid>
+            SRR['empty_good'],
+            SRR['get_lun_path'],
+            SRR['get_storage'],
+            SRR['one_lun'],
+            SRR['empty_good'],
             SRR['end_of_sequence']
         ])
         data = dict(self.mock_args())
         data['os_type'] = 'xyz'
+        data['space_reserve'] = True
         data.pop('flexvol_name')
         data['san_application_template'] = dict(name='san_appli', lun_count=5, total_size=1000, igroup_name='abc')
         set_module_args(data)
@@ -522,7 +556,8 @@ class TestMyModule(unittest.TestCase):
         expected_json = {'name': 'san_appli', 'svm': {'name': 'ansible'}, 'smart_container': True,
                          'san': {'application_components':
                                  [{'name': 'lun_name'}]}}
-        expected_call = call('POST', 'application/applications', {'return_timeout': 30, 'return_records': 'true'}, json=expected_json, headers=None)
+        expected_call = call(
+            'POST', 'application/applications', {'return_timeout': 30, 'return_records': 'true'}, json=expected_json, headers=None, files=None)
         assert expected_call in mock_request.mock_calls
 
     @patch('ansible_collections.netapp.ontap.plugins.module_utils.netapp.OntapRestAPI.send_request')

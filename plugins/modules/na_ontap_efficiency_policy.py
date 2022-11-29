@@ -387,9 +387,8 @@ class NetAppOntapEfficiencyPolicy(object):
             self.module.fail_json(msg="Error modifying efficiency policy %s: %s" % (self.parameters["policy_name"], error))
 
     def apply(self):
-        if not self.use_rest:
-            netapp_utils.ems_log_event("na_ontap_efficiency_policy", self.server)
         current = self.get_efficiency_policy()
+        modify = None
         cd_action = self.na_helper.get_cd_action(current, self.parameters)
         if cd_action is None and self.parameters['state'] == 'present':
             modify = self.na_helper.get_modified_attributes(current, self.parameters)
@@ -402,7 +401,8 @@ class NetAppOntapEfficiencyPolicy(object):
                 self.delete_efficiency_policy()
             elif modify:
                 self.modify_efficiency_policy(modify)
-        self.module.exit_json(changed=self.na_helper.changed)
+        result = netapp_utils.generate_result(self.na_helper.changed, cd_action, modify)
+        self.module.exit_json(**result)
 
 
 def main():
